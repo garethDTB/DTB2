@@ -1,0 +1,37 @@
+14
+18
+0
+1
+6
+1
+1
+hold70,Yellow,hold56,Red,hold84,Green
+Beth30
+4
+1
+0
+5
+2
+0
+0
+gareth,admin,tomasz,Yorkie,AliF
+0
+20
+
+1st columns
+2nd rows
+3rd line is if its a symetrical wall to display symetrical problems, o for false, 1 for true
+4th line height of button on creation page
+5th line width of button on creation page
+6th line touch screen (1 it is)
+7th feet specific (1 it is)
+8th line IS THE LIST OF FEET AVAILABLE AND THE LEDS unique to that wall that illuminate the holds
+9th Name of the board for drop box
+10 and 11 repeat of 8 and 9 as above.
+12th line auto belay (1 it is, min rows =28)
+13th line minimum grade
+14th line ofset duw t wall being offset when pre drilled
+15TH line is if its a home wall
+16th language 0 english, 1 spanish, 2 German, 3 french, 4 swedish
+17th Super Users
+18th Circuit Board, 1 its true
