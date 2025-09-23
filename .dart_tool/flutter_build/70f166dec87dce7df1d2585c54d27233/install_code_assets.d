@@ -1,0 +1,1 @@
+ C:\\Users\\garet\\src\\my-project\\dtb2\\.dart_tool\\flutter_build\\70f166dec87dce7df1d2585c54d27233\\native_assets.json: 
