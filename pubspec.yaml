@@ -48,6 +48,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   dropdown_button2: ^2.3.9
   dropbox_client: ^1.2.0
+  web_socket_channel: ^2.4.0
 
 
 dev_dependencies:
@@ -80,6 +81,7 @@ flutter:
     - assets/walls/default/test.csv
     - assets/walls/default/holdlist.csv
     - assets/walls/default/MirrorDic.txt
+    
     
 
   # To add assets to your application, add an assets section, like this:

@@ -24,7 +24,8 @@
         "path_provider",
         "provider",
         "shared_preferences",
-        "sticky_grouped_list"
+        "sticky_grouped_list",
+        "web_socket_channel"
       ],
       "devDependencies": [
         "flutter_lints",
@@ -54,6 +55,15 @@
         "stream_channel",
         "test_api",
         "vector_math"
+      ]
+    },
+    {
+      "name": "web_socket_channel",
+      "version": "2.4.0",
+      "dependencies": [
+        "async",
+        "crypto",
+        "stream_channel"
       ]
     },
     {
@@ -321,6 +331,14 @@
       ]
     },
     {
+      "name": "async",
+      "version": "2.13.0",
+      "dependencies": [
+        "collection",
+        "meta"
+      ]
+    },
+    {
       "name": "equatable",
       "version": "2.0.7",
       "dependencies": [
@@ -383,14 +401,6 @@
       "name": "dart_earcut",
       "version": "1.2.0",
       "dependencies": []
-    },
-    {
-      "name": "async",
-      "version": "2.13.0",
-      "dependencies": [
-        "collection",
-        "meta"
-      ]
     },
     {
       "name": "google_maps_flutter_web",

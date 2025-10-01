@@ -1,21 +1,21 @@
-14
-18
-0
-1
-6
+21
+21
 1
 1
-hold70,Yellow,hold56,Red,hold84,Green
-Beth30
-4
+3
 1
-0
+1
+hold1,Blue Feet,hold43,Black Feet
+ManDepot30
+3
+1
+2
 5
 2
 0
 0
-gareth,admin,tomasz,Yorkie,AliF
-0
+gareth,bomturrows,stallion,eli,arran,Matt Hails,hurricanejames,Mr Plainview,raxm
+2
 20
 
 1st columns
@@ -26,12 +26,13 @@ gareth,admin,tomasz,Yorkie,AliF
 6th line touch screen (1 it is)
 7th feet specific (1 it is)
 8th line IS THE LIST OF FEET AVAILABLE AND THE LEDS unique to that wall that illuminate the holds
-9th Name of the board for drop box
+9th line text to appear on screen, left in but does nothing can in future be removed but knock on effects of loads of files
 10 and 11 repeat of 8 and 9 as above.
 12th line auto belay (1 it is, min rows =28)
 13th line minimum grade
 14th line ofset duw t wall being offset when pre drilled
 15TH line is if its a home wall
 16th language 0 english, 1 spanish, 2 German, 3 french, 4 swedish
-17th Super Users
-18th Circuit Board, 1 its true
+17th Super user
+18th Circuit Board
+19th the max number of holds that can be selected unless log in
