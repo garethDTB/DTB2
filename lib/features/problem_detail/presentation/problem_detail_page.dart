@@ -16,7 +16,7 @@ import '../../../services/websocket_service.dart';
 import '../../../mirror_utils.dart';
 import '../../../providers/problems_provider.dart';
 import 'package:dtb2/hold_point.dart';
-
+import 'package:dtb2/services/hold_loader.dart';
 import 'widgets/wall_view.dart';
 import 'widgets/action_buttons_row.dart';
 import 'widgets/swipe_hint_arrow.dart';
@@ -199,33 +199,10 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   }
 
   Future<void> _loadHoldPositions() async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/walls/${widget.wallId}/dicholdlist.txt');
-      String data;
-      if (await file.exists()) {
-        data = await file.readAsString();
-      } else {
-        data = await rootBundle.loadString(
-          'assets/walls/default/dicholdlist.txt',
-        );
-      }
-
-      final Map<String, dynamic> decoded = jsonDecode(data);
-
-      setState(() {
-        holds = decoded.entries
-            .where((e) => e.value is List && e.value.length >= 2)
-            .map(
-              (e) => HoldPoint(
-                label: e.key,
-                x: (e.value[0] as num).toDouble(),
-                y: (e.value[1] as num).toDouble(),
-              ),
-            )
-            .toList();
-      });
-    } catch (_) {}
+    final newHolds = await HoldLoader.loadHolds(widget.wallId);
+    if (mounted) {
+      setState(() => holds = newHolds);
+    }
   }
 
   Future<void> _loadLikes() async {
@@ -297,49 +274,71 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
   List<Map<String, String>> _normalizeHolds(dynamic raw) {
     if (raw == null) return [];
+
+    String _convert(String raw) {
+      if (raw.startsWith("hold")) {
+        final ws = int.tryParse(raw.substring(4));
+        if (ws != null) {
+          return HoldUtils.labelForWs(ws, _cols, _rows); // ✅ ASCII AA/AB style
+        }
+      }
+      return HoldUtils.normalizeLabel(raw); // ✅ normalize "A1", "AA10", etc.
+    }
+
     if (raw is List && raw.isNotEmpty && raw.first is Map) {
       return raw.map<Map<String, String>>((e) {
-        return {"type": e["type"].toString(), "label": e["label"].toString()};
+        final rawLabel = e["label"].toString();
+        final label = _convert(rawLabel);
+        return {"type": e["type"].toString(), "label": label};
       }).toList();
     }
+
     if (raw is List && raw.isNotEmpty && raw.first is String) {
       final strHolds = raw.cast<String>();
       final result = <Map<String, String>>[];
       int feetIndex = strHolds.indexWhere((h) => h.toLowerCase() == "feet");
+
       if (feetIndex != -1) {
         if (strHolds.length >= 2) {
-          result.add({'type': 'start', 'label': strHolds[0]});
-          result.add({'type': 'start', 'label': strHolds[1]});
+          result.add({'type': 'start', 'label': _convert(strHolds[0])});
+          result.add({'type': 'start', 'label': _convert(strHolds[1])});
         } else {
-          result.add({'type': 'start', 'label': strHolds[0]});
+          result.add({'type': 'start', 'label': _convert(strHolds[0])});
         }
         if (feetIndex > 1) {
-          result.add({'type': 'finish', 'label': strHolds[feetIndex - 1]});
+          result.add({
+            'type': 'finish',
+            'label': _convert(strHolds[feetIndex - 1]),
+          });
         }
         for (int i = 2; i < feetIndex - 1; i++) {
-          result.add({'type': 'intermediate', 'label': strHolds[i]});
+          result.add({'type': 'intermediate', 'label': _convert(strHolds[i])});
         }
         for (int i = feetIndex + 1; i < strHolds.length; i++) {
-          result.add({'type': 'feet', 'label': strHolds[i]});
+          result.add({'type': 'feet', 'label': _convert(strHolds[i])});
         }
       } else {
         if (strHolds.length >= 2) {
-          result.add({'type': 'start', 'label': strHolds[0]});
-          result.add({'type': 'start', 'label': strHolds[1]});
+          result.add({'type': 'start', 'label': _convert(strHolds[0])});
+          result.add({'type': 'start', 'label': _convert(strHolds[1])});
         } else {
-          result.add({'type': 'start', 'label': strHolds[0]});
+          result.add({'type': 'start', 'label': _convert(strHolds[0])});
         }
         if (strHolds.length > 3) {
           for (int i = 2; i < strHolds.length - 1; i++) {
-            result.add({'type': 'intermediate', 'label': strHolds[i]});
+            result.add({
+              'type': 'intermediate',
+              'label': _convert(strHolds[i]),
+            });
           }
         }
         if (strHolds.length > 1) {
-          result.add({'type': 'finish', 'label': strHolds.last});
+          result.add({'type': 'finish', 'label': _convert(strHolds.last)});
         }
       }
       return result;
     }
+
     return [];
   }
 

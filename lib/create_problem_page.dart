@@ -11,6 +11,7 @@ import 'auth_state.dart';
 import 'hold_utils.dart';
 import 'services/websocket_service.dart';
 import 'package:collection/collection.dart';
+import 'package:dtb2/services/hold_loader.dart';
 
 // ---------------- ENUMS ----------------
 
@@ -279,7 +280,6 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
           final x = (val[0] as num).toDouble();
           final y = (val[1] as num).toDouble();
           if (x < 0 || y < 0) return;
-          if (!RegExp(r'^[A-Z]+\d+$').hasMatch(label)) return;
           holds.add(HoldPoint(label: label, x: x, y: y));
         }
       });
@@ -927,7 +927,7 @@ class WallPhoto extends StatelessWidget {
   Widget build(BuildContext context) {
     return InteractiveViewer(
       minScale: 0.6,
-      maxScale: 3.0,
+      maxScale: 6.0,
       child: AspectRatio(
         aspectRatio: baseWidth / baseHeight,
         child: LayoutBuilder(
@@ -945,15 +945,35 @@ class WallPhoto extends StatelessWidget {
                 ...holds.map((h) {
                   final sx = (h.x / baseWidth) * constraints.maxWidth;
                   final sy = (h.y / baseHeight) * constraints.maxHeight;
-                  const double r = 20.0;
+                  // scale radius smoothly between 15 (few cols) and 8 (many cols)
+                  double _scaledRadius(int cols) {
+                    const minCols = 10; // smallest wall you expect
+                    const maxCols = 35; // largest wall you expect
+                    const minR = 4.0;
+                    const maxR = 20.0;
+
+                    // clamp cols into [minCols, maxCols]
+                    final c = cols.clamp(minCols, maxCols);
+
+                    // map cols to radius
+                    final t =
+                        (c - minCols) /
+                        (maxCols - minCols); // 0 → minCols, 1 → maxCols
+                    return maxR -
+                        t * (maxR - minR); // decreases as cols increase
+                  }
+
+                  final double r = _scaledRadius(cols);
+                  final double baseCircle = (160.0 / cols).clamp(40.0, 80.0);
+
                   return Positioned(
-                    left: sx - r,
-                    top: sy - r,
-                    width: r * 2,
-                    height: r * 2,
+                    left: sx - (baseCircle / 2),
+                    top: sy - (baseCircle / 2),
+                    width: baseCircle,
+                    height: baseCircle,
                     child: _HoldButton(
                       label: h.label,
-                      radius: r,
+                      radius: r, // still used for tap hitbox
                       rows: rows,
                       cols: cols,
                       selectionOrder: selectionOrder,
@@ -961,6 +981,7 @@ class WallPhoto extends StatelessWidget {
                       cStart1: cStart1,
                       cStart2: cStart2,
                       cFinish: cFinish,
+                      baseCircle: baseCircle,
                       feetSelected: feetSelected,
                       onTapHold: onTapHold,
                       onConfirmTap: onConfirmTap,
@@ -990,6 +1011,7 @@ class _HoldButton extends StatelessWidget {
   final Set<int> feetSelected;
   final Function(String) onTapHold;
   final Function(int) onConfirmTap;
+  final double baseCircle;
 
   const _HoldButton({
     required this.label,
@@ -1004,6 +1026,7 @@ class _HoldButton extends StatelessWidget {
     required this.feetSelected,
     required this.onTapHold,
     required this.onConfirmTap,
+    required this.baseCircle,
   });
 
   @override
@@ -1049,6 +1072,7 @@ class _HoldButton extends StatelessWidget {
     }
 
     return GestureDetector(
+      // Base circle size scales with cols
       onTap: () {
         if (confirmStage == ConfirmStage.none ||
             confirmStage == ConfirmStage.feet) {
@@ -1070,19 +1094,19 @@ class _HoldButton extends StatelessWidget {
           ),
           if (color != null) ...[
             Container(
-              width: radius * 2,
-              height: radius * 2,
+              width: baseCircle,
+              height: baseCircle,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
+                border: Border.all(color: Colors.white, width: 4),
               ),
             ),
             Container(
-              width: (radius * 2) - 6,
-              height: (radius * 2) - 6,
+              width: (baseCircle - 6),
+              height: (baseCircle - 6),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: color, width: 3),
+                border: Border.all(color: color, width: 4),
               ),
             ),
           ],

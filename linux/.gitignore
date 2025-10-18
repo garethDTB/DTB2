@@ -1,1 +1,23 @@
-flutter/ephemeral
+# Flutter/Dart/Pub related
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_export_environment.sh
+
+# iOS and Android
+ios/Flutter/Flutter.podspec
+ios/.symlinks/
+ios/Pods/
+ios/Runner/GeneratedPluginRegistrant.*
+android/.gradle/
+android/app/build/
+
+# VS Code
+.vscode/
+
+# Generated ephemeral files
+**/ephemeral/

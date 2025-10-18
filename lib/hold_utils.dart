@@ -114,22 +114,23 @@ int getPointsForGrade(String grade) {
 /// ------------------------------------------------------------------
 
 class HoldUtils {
+  /// ✅ Keep raw label (no AA/BB conversion)
+  static String normalizeLabel(String label) {
+    return label.trim();
+  }
+
   /// Convert "A1" style label → index (1-based).
   static int wsIndexFromLabel(String label, int cols, int rows) {
-    final m = RegExp(r'^([A-Z]+)(\d+)$').firstMatch(label.trim().toUpperCase());
+    final m = RegExp(r'^(.)(\d+)$').firstMatch(label.trim());
     if (m == null) throw ArgumentError('Bad hold label: $label');
 
-    final letters = m.group(1)!;
+    final letter = m.group(1)!; // e.g. "A", "Z", "[", "\"
     final rowNum = int.parse(m.group(2)!);
 
-    // convert letters → column index
-    int col = 0;
-    for (int i = 0; i < letters.length; i++) {
-      col = col * 26 + (letters.codeUnitAt(i) - 65 + 1);
-    }
-    col -= 1; // zero-based column
-    final rowIdx = rowNum - 1; // zero-based row
+    // ASCII col (A=65 → 0, B=66 → 1, …, Z=90 → 25, [=91 → 26, …)
+    int col = letter.codeUnitAt(0) - 65;
 
+    final rowIdx = rowNum - 1; // zero-based row
     final ws = rowIdx * cols + col + 1;
     return ws;
   }
@@ -143,7 +144,7 @@ class HoldUtils {
     }
   }
 
-  /// Convert index (1-based) → "A1" style label.
+  /// Convert index (1-based) → ASCII style label ("A1", "Z10", "[3", …).
   static String labelForWs(int ws, int cols, int rows) {
     final zero = ws - 1;
     final row = zero ~/ cols;
@@ -152,7 +153,7 @@ class HoldUtils {
     return "${_colLetters(col)}${row + 1}";
   }
 
-  /// Convert "hold53" → "A1" style label.
+  /// Convert "hold53" → ASCII label.
   static String convertHoldId(String holdId, int cols, int rows) {
     final match = RegExp(r'hold(\d+)').firstMatch(holdId);
     if (match == null) return holdId;
@@ -163,16 +164,9 @@ class HoldUtils {
     return labelForWs(index, cols, rows);
   }
 
-  /// Helper: column number → Excel-style letters
+  /// Helper: col → ASCII char (A=0, Z=25, [=26, …).
   static String _colLetters(int col) {
-    String colLetter = '';
-    int colNum = col;
-    do {
-      colLetter =
-          String.fromCharCode('A'.codeUnitAt(0) + (colNum % 26)) + colLetter;
-      colNum = (colNum ~/ 26) - 1;
-    } while (colNum >= 0);
-    return colLetter;
+    return String.fromCharCode(65 + col);
   }
 }
 

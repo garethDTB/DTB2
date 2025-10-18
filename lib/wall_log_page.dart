@@ -619,7 +619,7 @@ class _WallLogPageState extends State<WallLogPage> {
                     ),
                   ),
 
-                // ✅ “Nearest wall” banner
+                // ✅ Nearest wall banner
                 if (_highlightWall != null && selectedWall == null) ...[
                   const SizedBox(height: 10),
                   _nearestWallBanner(),
@@ -647,98 +647,101 @@ class _WallLogPageState extends State<WallLogPage> {
                   const SizedBox(height: 24),
                 ],
 
-                if (selectedWall != null) ...[
-                  _menuButton(
-                    label: "Load Problems",
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              LoadProblemsPage(wallId: selectedWall!),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _menuButton(
-                    label: "Create Problem",
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CreateProblemPage(wallId: selectedWall!),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ✅ Draft button (only if drafts exist)
-                  if (_hasWallDrafts)
-                    _menuButton(
-                      label: "Draft Problems",
-                      onPressed: () async {
-                        final dir = await getApplicationDocumentsDirectory();
-                        final draftFile = File(
-                          "${dir.path}/${selectedWall!}_drafts.csv", // ✅ match CreateProblemPage
-                        );
-                        if (!await draftFile.exists()) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("No draft problems found."),
-                            ),
-                          );
-                          return;
-                        }
-                        final lines = await draftFile.readAsLines();
-                        if (lines.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("No draft problems found."),
-                            ),
-                          );
-                          return;
-                        }
-                        debugPrint(
-                          "📂 Navigating to LoadProblemsPage in draft mode (${lines.length} drafts)",
-                        );
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => LoadProblemsPage(
-                              wallId: selectedWall!,
-                              isDraftMode: true, // ✅ new flag
-                            ),
+                if (selectedWall != null)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _menuButton(
+                            label: "Load Problems",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      LoadProblemsPage(wallId: selectedWall!),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-                  if (_hasWallDrafts) const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                  _menuButton(
-                    label: "Log Book",
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LogBookPage(wallId: selectedWall!),
-                        ),
-                      );
-                    },
+                          _menuButton(
+                            label: "Create Problem",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      CreateProblemPage(wallId: selectedWall!),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          if (_hasWallDrafts) ...[
+                            _menuButton(
+                              label: "Draft Problems",
+                              onPressed: () async {
+                                final dir =
+                                    await getApplicationDocumentsDirectory();
+                                final draftFile = File(
+                                  "${dir.path}/${selectedWall!}_drafts.csv",
+                                );
+                                if (!await draftFile.exists() ||
+                                    (await draftFile.readAsLines()).isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("No draft problems found."),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => LoadProblemsPage(
+                                      wallId: selectedWall!,
+                                      isDraftMode: true,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          _menuButton(
+                            label: "Log Book",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      LogBookPage(wallId: selectedWall!),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          _menuButton(
+                            label: "Settings",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SettingsPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  _menuButton(
-                    label: "Settings",
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SettingsPage()),
-                      );
-                    },
-                  ),
-                ],
               ],
             ),
           ),
