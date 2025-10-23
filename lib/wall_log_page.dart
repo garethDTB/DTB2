@@ -39,6 +39,7 @@ class _WallLogPageState extends State<WallLogPage> {
   String? _highlightWall; // nearest wall highlight
   Position? _userPosition;
   bool _locationDenied = false;
+  Map<String, List<String>> _wallSuperusers = {};
 
   List<Session> _sessions = [];
   bool _loadingSessions = false;
@@ -399,6 +400,31 @@ class _WallLogPageState extends State<WallLogPage> {
     }
   }
 
+  Future<List<String>> _loadSuperusers(String wallId) async {
+    try {
+      final file = await _getLocalWallFile(wallId, "Settings");
+      if (!await file.exists()) return [];
+      final lines = await file.readAsLines();
+
+      // 👇 adjust index if needed, in your example the superuser line was near the bottom
+      // here we take the first line that contains commas and no "hold"
+      final superuserLine = lines.firstWhere(
+        (line) => line.contains(",") && !line.contains("hold"),
+        orElse: () => "",
+      );
+
+      if (superuserLine.isEmpty) return [];
+      return superuserLine
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint("⚠️ Failed to parse superusers for $wallId: $e");
+      return [];
+    }
+  }
+
   /// ✅ Enter wall (sequential loading with overlay)
   Future<void> _enterWall(String wall) async {
     setState(() {
@@ -448,9 +474,17 @@ class _WallLogPageState extends State<WallLogPage> {
         _hasWallDrafts = hasDrafts;
       });
     }
-
     if (!mounted) return;
-    setState(() => _isLoadingWall = false);
+    setState(() {
+      _isLoadingWall = false;
+    });
+
+    // ✅ keep old entries, only update this wall
+    final superusers = await _loadSuperusers(wall);
+    setState(() {
+      _wallSuperusers[wall] = superusers;
+    });
+    ;
   }
 
   Future<void> _refreshTestFile(String wallId) async {
@@ -659,8 +693,11 @@ class _WallLogPageState extends State<WallLogPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      LoadProblemsPage(wallId: selectedWall!),
+                                  builder: (_) => LoadProblemsPage(
+                                    wallId: selectedWall!,
+                                    superusers:
+                                        _wallSuperusers[selectedWall!] ?? [],
+                                  ),
                                 ),
                               );
                             },
@@ -748,6 +785,7 @@ class _WallLogPageState extends State<WallLogPage> {
         ),
 
         // ✅ Loading overlay
+        // ✅ Loading overlay
         if (_isLoadingWall)
           AnimatedOpacity(
             opacity: _isLoadingWall ? 1.0 : 0.0,
@@ -779,6 +817,26 @@ class _WallLogPageState extends State<WallLogPage> {
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                             ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // ✅ Cancel button
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.close),
+                            label: const Text("Cancel"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isLoadingWall = false;
+                              });
+                            },
                           ),
                         ],
                       ),

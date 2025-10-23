@@ -7,23 +7,32 @@ class LegendBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final items = <Widget>[
+      _legendItem(Colors.green, "Start"),
+      _legendItem(Colors.red, "Finish"),
+      _legendItem(Colors.blue, "Intermediate"),
+    ];
+
+    if (footMode == 2) {
+      items.insert(
+        2,
+        _legendItem(Colors.yellow, "Feet"),
+      ); // insert before intermediate
+    }
+
     return Container(
       padding: const EdgeInsets.all(8),
       color: Colors.grey.shade200,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _legendItem(Colors.green, "Start"),
-          _legendItem(Colors.red, "Finish"),
-          _legendItem(Colors.yellow, "Feet (mode $footMode)"),
-          _legendItem(Colors.blue, "Intermediate"),
-        ],
+        children: items,
       ),
     );
   }
 
   Widget _legendItem(Color color, String text) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 16,

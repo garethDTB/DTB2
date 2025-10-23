@@ -359,6 +359,30 @@ class ApiService {
     return data;
   }
 
+  Future<String?> getProblemIdByName(String wallId, String problemName) async {
+    final problems = await getWallProblems(wallId);
+    final match = problems.firstWhere(
+      (p) => (p['Problem'] as String).trim() == problemName.trim(),
+      orElse: () => {},
+    );
+    return match.isNotEmpty ? match['id'] as String? : null;
+  }
+
+  /// ------------------------------
+  /// PROBLEMS - DELETE
+  /// ------------------------------
+  Future<void> deleteProblem(String wallId, String problemId) async {
+    final url = Uri.parse('$baseUrl/walls/$wallId/problems/$problemId');
+
+    final resp = await http.delete(url);
+    if (resp.statusCode != 200 && resp.statusCode != 204) {
+      throw Exception(
+        "Failed to delete problem [$problemId] from wall [$wallId]. "
+        "status [${resp.statusCode}] ${resp.body}",
+      );
+    }
+  }
+
   /// ------------------------------
   /// COMMENTS
   /// ------------------------------

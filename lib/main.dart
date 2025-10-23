@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import 'auth_state.dart';
 import 'app_state.dart';
 import 'login_page.dart';
@@ -14,6 +15,7 @@ import 'services/api_service.dart';
 import 'services/websocket_service.dart';
 import 'providers/problems_provider.dart';
 import 'features/comments/presentation/comments_page.dart';
+import 'create_problem_page.dart'; // 👈 Make sure this import exists!
 
 Future<void> clearAllWallData() async {
   final dir = await getApplicationDocumentsDirectory();
@@ -75,10 +77,10 @@ class _ClimbLightAppState extends State<ClimbLightApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      print("📱 App resumed → reconnecting WebSocket...");
+      debugPrint("📱 App resumed → reconnecting WebSocket...");
       ProblemUpdaterService.instance.connect();
     } else if (state == AppLifecycleState.paused) {
-      print("📱 App paused → disconnecting WebSocket...");
+      debugPrint("📱 App paused → disconnecting WebSocket...");
       ProblemUpdaterService.instance.disconnect();
     }
   }
@@ -111,6 +113,23 @@ class _ClimbLightAppState extends State<ClimbLightApp>
               wallId: args["wallId"],
               problemName: args["problemName"],
               user: args["user"],
+            );
+          },
+        ),
+
+        // 👇 Create / Edit Problem route
+        GoRoute(
+          path: '/create',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+
+            return CreateProblemPage(
+              wallId: extra?['wallId'] ?? '',
+              isDraftMode: extra?['isDraftMode'] ?? false,
+              isEditing: extra?['isEditing'] ?? false,
+              problemRow: (extra?['problemRow'] as List?)?.cast<String>(),
+              draftRow: (extra?['draftRow'] as List?)
+                  ?.cast<String>(), // optional, if you also support drafts
             );
           },
         ),

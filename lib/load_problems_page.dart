@@ -18,11 +18,12 @@ import 'package:flutter/services.dart' show rootBundle;
 class LoadProblemsPage extends StatefulWidget {
   final String wallId;
   final bool isDraftMode; // ✅ distinguish drafts
-
+  final List<String> superusers;
   const LoadProblemsPage({
     super.key,
     required this.wallId,
     this.isDraftMode = false,
+    this.superusers = const [],
   });
 
   @override
@@ -488,6 +489,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                       numRows: provider.numRows,
                       numCols: provider.numCols,
                       gradeMode: provider.gradeMode,
+                      superusers: widget.superusers,
                     ),
                   ),
                 );

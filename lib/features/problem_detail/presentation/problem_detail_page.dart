@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../hold_utils.dart';
 import '../../../auth_state.dart';
 import '../../../services/api_service.dart';
@@ -17,6 +18,7 @@ import '../../../mirror_utils.dart';
 import '../../../providers/problems_provider.dart';
 import 'package:dtb2/hold_point.dart';
 import 'package:dtb2/services/hold_loader.dart';
+
 import 'widgets/wall_view.dart';
 import 'widgets/action_buttons_row.dart';
 import 'widgets/swipe_hint_arrow.dart';
@@ -30,6 +32,7 @@ class ProblemDetailPage extends StatefulWidget {
   final int numRows;
   final int numCols;
   final String gradeMode;
+  final List<String> superusers; // 👈 NEW
 
   const ProblemDetailPage({
     super.key,
@@ -40,6 +43,7 @@ class ProblemDetailPage extends StatefulWidget {
     required this.numRows,
     required this.numCols,
     this.gradeMode = "french",
+    this.superusers = const [], // 👈 NEW
   });
 
   @override
@@ -58,7 +62,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   int _rows = 20;
 
   String gradeMode = "french";
-
   Map<String, int> _attemptCounts = {};
 
   bool _likedByUser = false;
@@ -90,7 +93,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     _loadLikes();
     _loadWallImage();
 
-    // 👇 listen to websocket messages
     _wsSub = ProblemUpdaterService.instance.messages.listen((msg) {
       if (!mounted) return;
       if (msg is Map && msg["type"] == 3) {
@@ -99,9 +101,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (autoSendToBoard) {
-        _sendToBoard();
-      }
+      if (autoSendToBoard) _sendToBoard();
     });
   }
 
@@ -138,7 +138,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     setState(() {
       gradeMode = prefs.getString('gradeMode') ?? widget.gradeMode;
       autoSendToBoard = prefs.getBool('autoSend') ?? false;
-
       if (autoSendToBoard) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _sendToBoard();
@@ -200,9 +199,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
   Future<void> _loadHoldPositions() async {
     final newHolds = await HoldLoader.loadHolds(widget.wallId);
-    if (mounted) {
-      setState(() => holds = newHolds);
-    }
+    if (mounted) setState(() => holds = newHolds);
   }
 
   Future<void> _loadLikes() async {
@@ -214,7 +211,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
     try {
       final likes = await api.getWallLikes(widget.wallId, user);
-
       setState(() {
         _likesCount = (likes["aggregated"] as List)
             .where((e) => e["Problem"] == rawName)
@@ -229,9 +225,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     if (currentIndex < widget.problems.length - 1) {
       setState(() => currentIndex++);
       _loadLikes();
-      if (autoSendToBoard) {
-        _sendToBoard();
-      }
+      if (autoSendToBoard) _sendToBoard();
     }
   }
 
@@ -239,9 +233,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     if (currentIndex > 0) {
       setState(() => currentIndex--);
       _loadLikes();
-      if (autoSendToBoard) {
-        _sendToBoard();
-      }
+      if (autoSendToBoard) _sendToBoard();
     }
   }
 
@@ -274,71 +266,49 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
   List<Map<String, String>> _normalizeHolds(dynamic raw) {
     if (raw == null) return [];
-
-    String _convert(String raw) {
-      if (raw.startsWith("hold")) {
-        final ws = int.tryParse(raw.substring(4));
-        if (ws != null) {
-          return HoldUtils.labelForWs(ws, _cols, _rows); // ✅ ASCII AA/AB style
-        }
-      }
-      return HoldUtils.normalizeLabel(raw); // ✅ normalize "A1", "AA10", etc.
-    }
-
     if (raw is List && raw.isNotEmpty && raw.first is Map) {
       return raw.map<Map<String, String>>((e) {
-        final rawLabel = e["label"].toString();
-        final label = _convert(rawLabel);
-        return {"type": e["type"].toString(), "label": label};
+        return {"type": e["type"].toString(), "label": e["label"].toString()};
       }).toList();
     }
-
     if (raw is List && raw.isNotEmpty && raw.first is String) {
       final strHolds = raw.cast<String>();
       final result = <Map<String, String>>[];
       int feetIndex = strHolds.indexWhere((h) => h.toLowerCase() == "feet");
-
       if (feetIndex != -1) {
         if (strHolds.length >= 2) {
-          result.add({'type': 'start', 'label': _convert(strHolds[0])});
-          result.add({'type': 'start', 'label': _convert(strHolds[1])});
+          result.add({'type': 'start', 'label': strHolds[0]});
+          result.add({'type': 'start', 'label': strHolds[1]});
         } else {
-          result.add({'type': 'start', 'label': _convert(strHolds[0])});
+          result.add({'type': 'start', 'label': strHolds[0]});
         }
         if (feetIndex > 1) {
-          result.add({
-            'type': 'finish',
-            'label': _convert(strHolds[feetIndex - 1]),
-          });
+          result.add({'type': 'finish', 'label': strHolds[feetIndex - 1]});
         }
         for (int i = 2; i < feetIndex - 1; i++) {
-          result.add({'type': 'intermediate', 'label': _convert(strHolds[i])});
+          result.add({'type': 'intermediate', 'label': strHolds[i]});
         }
         for (int i = feetIndex + 1; i < strHolds.length; i++) {
-          result.add({'type': 'feet', 'label': _convert(strHolds[i])});
+          result.add({'type': 'feet', 'label': strHolds[i]});
         }
       } else {
         if (strHolds.length >= 2) {
-          result.add({'type': 'start', 'label': _convert(strHolds[0])});
-          result.add({'type': 'start', 'label': _convert(strHolds[1])});
+          result.add({'type': 'start', 'label': strHolds[0]});
+          result.add({'type': 'start', 'label': strHolds[1]});
         } else {
-          result.add({'type': 'start', 'label': _convert(strHolds[0])});
+          result.add({'type': 'start', 'label': strHolds[0]});
         }
         if (strHolds.length > 3) {
           for (int i = 2; i < strHolds.length - 1; i++) {
-            result.add({
-              'type': 'intermediate',
-              'label': _convert(strHolds[i]),
-            });
+            result.add({'type': 'intermediate', 'label': strHolds[i]});
           }
         }
         if (strHolds.length > 1) {
-          result.add({'type': 'finish', 'label': _convert(strHolds.last)});
+          result.add({'type': 'finish', 'label': strHolds.last});
         }
       }
       return result;
     }
-
     return [];
   }
 
@@ -423,7 +393,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     final problemName = (problem['name'] ?? '').toString();
     final auth = context.read<AuthState>();
     final user = auth.username ?? "guest";
-    _updateSwipeMessage("Sending… please wait", Colors.orange, clearAfter: 0);
+    _updateSwipeMessage("Sending… please wait", Colors.orange);
     try {
       final prefs = await SharedPreferences.getInstance();
       final wallJson = prefs.getString('lastSelectedWall');
@@ -470,7 +440,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     }
   }
 
-  // NEW: Load What's On from Azure
   Future<void> _loadWhatsOn() async {
     final api = context.read<ApiService>();
     try {
@@ -483,7 +452,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
         );
         return;
       }
-
       final problemName = (whatsOn['Problem'] ?? '').trim();
       final idx = widget.problems.indexWhere(
         (p) => (p['name'] ?? '').trim() == problemName,
@@ -515,7 +483,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     }
   }
 
-  // ✅ Fixed: Only one _openComments now
   Future<void> _openComments() async {
     final problem = widget.problems[currentIndex];
     final auth = context.read<AuthState>();
@@ -544,6 +511,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     } else {
       titleText = rawName.contains(grade) ? rawName : "$rawName ($grade)";
     }
+
     final provider = context.watch<ProblemsProvider>();
     Color? headerColor;
     if (provider.tickedProblemsToday.contains(rawName)) {
@@ -553,14 +521,56 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     } else if (provider.attemptedProblems.contains(rawName)) {
       headerColor = Colors.red.shade100;
     }
+
     final attemptCount = _attemptCounts[rawName] ?? 0;
+
+    // 👇 NEW: canEdit logic
+    final auth = context.watch<AuthState>();
+    final username = (auth.username ?? "").toLowerCase();
+    final setter = (problem['setter'] ?? "").toString().toLowerCase();
+    final canEdit =
+        username.isNotEmpty &&
+        (username == setter ||
+            widget.superusers.map((s) => s.toLowerCase()).contains(username));
+
     return WillPopScope(
       onWillPop: () async {
         Navigator.pop(context);
         return true;
       },
       child: Scaffold(
-        appBar: AppBar(backgroundColor: headerColor, title: Text(titleText)),
+        appBar: AppBar(
+          backgroundColor: headerColor,
+          title: Text(titleText),
+          actions: [
+            if (canEdit) // 👈 NEW
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () {
+                  final row = [
+                    problem['id'] ?? '', // 👈 store the Cosmos id at index 0
+                    problem['name'] ?? '',
+                    problem['grade'] ?? '',
+                    problem['comment'] ?? '',
+                    problem['setter'] ?? '',
+                    (problem['stars'] ?? '1').toString(),
+                    ...(problem['holds'] as List).map((h) => h.toString()),
+                  ];
+
+                  context.push(
+                    "/create",
+                    extra: {
+                      "isEditing": true,
+                      "problemRow": row,
+                      "wallId": widget.wallId,
+                      "numCols": _cols,
+                      "numRows": _rows,
+                    },
+                  );
+                },
+              ),
+          ],
+        ),
         body: SafeArea(
           child: Column(
             children: [
@@ -620,9 +630,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
                 onMirrorToggle: () {
                   setState(() => isMirrored = !isMirrored);
                   HapticFeedback.selectionClick();
-                  if (autoSendToBoard) {
-                    _sendToBoard();
-                  }
+                  if (autoSendToBoard) _sendToBoard();
                 },
                 onWhatsOn: _loadWhatsOn,
                 onComments: _openComments,
