@@ -716,7 +716,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                       if (dupProblem != null) return;
                     }
 
-                    // --- starts/finish/intermediates ---
+                    // ---------------- STARTS / FINISH / INTERMEDIATES ----------------
                     final starts = <String>[];
                     if (cStart1 != null)
                       starts.add(labelForWs(cStart1!, cols, rows));
@@ -726,9 +726,21 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                     final finish = cFinish != null
                         ? labelForWs(cFinish!, cols, rows)
                         : "";
+
                     final intermediates = labels
                         .where((l) => !starts.contains(l) && l != finish)
                         .toList();
+
+                    // feetMode=2 → add "feet" marker + selected foot holds
+                    if (footMode == 2 && feetSelected.isNotEmpty) {
+                      intermediates.add("feet");
+                      intermediates.addAll(feetSelected.map((ws) => "hold$ws"));
+                    }
+
+                    // feetMode=1 → add tokens from dialog
+                    if (footMode == 1 && feetTokens.isNotEmpty) {
+                      intermediates.addAll(feetTokens);
+                    }
 
                     // ---------------- DRAFT BRANCH ----------------
                     if (draft) {
@@ -739,7 +751,12 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                         comment: comment,
                         setter: setter,
                         stars: stars,
-                        feetTokens: feetTokens,
+                        feetTokens: intermediates.contains("feet")
+                            ? intermediates.sublist(
+                                intermediates.indexOf("feet") + 1,
+                              )
+                            : feetTokens,
+                        footMode: footMode,
                       );
                       if (!success && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -751,7 +768,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                           ),
                         );
                       }
-                      return; // stop draft
+                      return; // stop draft save
                     }
 
                     // ---------------- EDITING BRANCH ----------------
@@ -839,6 +856,34 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                               return ws == null ? finish : "hold$ws";
                             })(),
                     );
+
+                    // ✅ also write to local CSV
+                    await _appendToCsv([
+                      DateTime.now().millisecondsSinceEpoch.toString(),
+                      fullName,
+                      grade,
+                      comment,
+                      setter,
+                      stars.toString(),
+                      ...starts.map((l) {
+                        final ws = tryWsIndexFromLabel(l, cols, rows);
+                        return ws == null ? l : "hold$ws";
+                      }),
+                      ...intermediates.map((l) {
+                        final ws = tryWsIndexFromLabel(l, cols, rows);
+                        return ws == null ? l : "hold$ws";
+                      }),
+                      finish.isEmpty
+                          ? ""
+                          : (() {
+                              final ws = tryWsIndexFromLabel(
+                                finish,
+                                cols,
+                                rows,
+                              );
+                              return ws == null ? finish : "hold$ws";
+                            })(),
+                    ]);
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1404,8 +1449,12 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
     final res = <String>[];
     for (int g = minNum; g <= 9; g++) {
       res.add("${g}a");
+      if (g == 9) break; // cap at 9a, no pluses or b/c
+      res.add("${g}a+");
       res.add("${g}b");
+      res.add("${g}b+");
       res.add("${g}c");
+      res.add("${g}c+");
     }
     return res;
   }

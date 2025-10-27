@@ -46,7 +46,8 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       Future.microtask(() async {
         final provider = context.read<ProblemsProvider>();
         final api = context.read<ApiService>();
-        await provider.load(widget.wallId, api);
+        final auth = context.read<AuthState>();
+        await provider.load(widget.wallId, api, auth.username!);
       });
     }
   }
@@ -156,8 +157,22 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         body = RefreshIndicator(
           onRefresh: () async {
             final api = context.read<ApiService>();
-            await provider.load(widget.wallId, api);
+            final auth = context.read<AuthState>();
+            await provider.load(widget.wallId, api, auth.username!);
+
+            // 🔄 Reset filters & search after reload
+            setState(() {
+              activeFilter = ProblemFilterType.none;
+              provider.selectedGrade = null;
+              searchController.clear();
+            });
+            provider.filterProblems(
+              "",
+              null,
+              extraFilter: ProblemFilterType.none,
+            );
           },
+
           child: _buildListView(
             context,
             provider.filteredProblems,
@@ -184,7 +199,12 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                   MaterialPageRoute(builder: (_) => const SettingsPage()),
                 );
                 final api = context.read<ApiService>();
-                await provider.load(widget.wallId, api);
+                final auth = context.read<AuthState>();
+                await provider.load(
+                  widget.wallId,
+                  api,
+                  auth.username ?? "guest",
+                );
               },
             ),
         ],

@@ -20,6 +20,7 @@ class DraftService {
   /// Append a new draft
   ///
   /// Always saves holds as `holdNNN` IDs for consistency.
+  /// If feetMode=2, adds a "feet" marker followed by all foot holds.
   Future<bool> appendDraft(
     List<int> confirmedWs, {
     required String fullName,
@@ -27,7 +28,9 @@ class DraftService {
     required String comment,
     required String setter,
     required int stars,
-    List<String> feetTokens = const [],
+    required int footMode,
+    Set<int> feetSelected = const {},
+    List<String> feetTokens = const [], // footMode=1 tokens
     int maxDrafts = 10,
   }) async {
     final file = await _getDraftsFile();
@@ -50,10 +53,24 @@ class DraftService {
       setter,
       stars.toString(),
       ...holdIds,
-      ...feetTokens,
     ];
 
-    debugPrint("💾 DRAFT SAVE → '$fullName' with ${holdIds.length} holds");
+    // ✅ feetMode=2 → add "feet" marker + selected foot holds
+    if (footMode == 2 && feetSelected.isNotEmpty) {
+      row.add("feet");
+      row.addAll(feetSelected.map((ws) => "hold$ws"));
+    }
+
+    // ✅ feetMode=1 → keep named tokens
+    if (footMode == 1 && feetTokens.isNotEmpty) {
+      row.addAll(feetTokens);
+    }
+
+    debugPrint(
+      "💾 DRAFT SAVE → '$fullName' with ${holdIds.length} holds, "
+      "feetMode=$footMode "
+      "(${footMode == 2 ? feetSelected.length : feetTokens.length} feet)",
+    );
 
     final sink = file.openWrite(mode: FileMode.append);
     sink.writeln(row.join("\t"));
@@ -88,14 +105,23 @@ class DraftService {
   ///
   /// Supports both old drafts saved as labels (e.g. "A5") and
   /// new drafts saved as IDs ("hold123").
+  /// Also restores "feet" marker if present.
   Map<String, dynamic> restoreSelection(List<String> draftRow) {
     debugPrint("📥 DRAFT LOAD → $draftRow");
 
     final holdsPart = draftRow.sublist(5);
     final selected = <int>{};
     final selectionOrder = <int>[];
+    final feetSelected = <int>{};
+
+    bool inFeetSection = false;
 
     for (final token in holdsPart) {
+      if (token == "feet") {
+        inFeetSection = true;
+        continue;
+      }
+
       int? ws;
       if (token.startsWith("hold")) {
         ws = int.tryParse(token.substring(4));
@@ -103,13 +129,21 @@ class DraftService {
         ws = tryWsIndexFromLabel(token, cols, rows);
       }
 
-      debugPrint("   ↳ $token => wsIndex=$ws");
+      debugPrint("   ↳ $token => wsIndex=$ws (feet=$inFeetSection)");
       if (ws != null) {
-        selected.add(ws);
-        selectionOrder.add(ws);
+        if (inFeetSection) {
+          feetSelected.add(ws);
+        } else {
+          selected.add(ws);
+          selectionOrder.add(ws);
+        }
       }
     }
 
-    return {"selected": selected, "selectionOrder": selectionOrder};
+    return {
+      "selected": selected,
+      "selectionOrder": selectionOrder,
+      "feetSelected": feetSelected,
+    };
   }
 }

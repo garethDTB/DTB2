@@ -1,3 +1,4 @@
+// lib/providers/problems_provider.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
@@ -27,7 +28,7 @@ class ProblemsProvider extends ChangeNotifier {
   bool isLoading = false;
   bool hasLoaded = false;
 
-  Future<void> load(String wallId, ApiService api) async {
+  Future<void> load(String wallId, ApiService api, String user) async {
     isLoading = true;
     notifyListeners();
 
@@ -44,7 +45,7 @@ class ProblemsProvider extends ChangeNotifier {
       await _loadProblems(wallId, api);
       await _loadTicks(wallId);
       await _loadLikes(wallId);
-      await _loadSessions(wallId);
+      await _loadSessions(wallId, api, user); // ✅ hybrid
       await _loadSettings();
 
       filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
@@ -172,20 +173,32 @@ class ProblemsProvider extends ChangeNotifier {
     }
   }
 
-  /// ✅ Restores attempts (all = red), ticks (today = green, past = purple)
-  Future<void> _loadSessions(String wallId) async {
+  /// ✅ Hybrid session load: tries Azure first, falls back to local prefs
+  Future<void> _loadSessions(String wallId, ApiService api, String user) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString("sessions_$wallId");
-    if (jsonString == null) return;
+    List<Map<String, dynamic>> sessions = [];
 
-    final List<dynamic> raw = jsonDecode(jsonString);
+    try {
+      sessions = await api.getSessions(wallId, user);
+      await prefs.setString("sessions_$wallId", jsonEncode(sessions));
+      debugPrint("☁️ Loaded ${sessions.length} sessions from Azure");
+    } catch (e) {
+      final jsonString = prefs.getString("sessions_$wallId");
+      if (jsonString != null) {
+        sessions = (jsonDecode(jsonString) as List)
+            .cast<Map<String, dynamic>>();
+        debugPrint("📦 Loaded ${sessions.length} sessions from local cache");
+      } else {
+        debugPrint("⚠️ No local or remote sessions found for $wallId");
+      }
+    }
+
     final now = DateTime.now();
-
     final tmpAttempts = <String>{};
     final tmpTicksPast = <String>{};
     final tmpTicksToday = <String>{};
 
-    for (var s in raw) {
+    for (var s in sessions) {
       final dateStr = s['Date'] ?? s['date'] ?? "";
       final sessionDate = DateTime.tryParse(dateStr);
       final isToday =
@@ -194,13 +207,12 @@ class ProblemsProvider extends ChangeNotifier {
           sessionDate.month == now.month &&
           sessionDate.day == now.day;
 
-      final attempts = (s['Attempts'] ?? s['attempts'] ?? []) as List;
-      final sent = (s['Sent'] ?? s['ticks'] ?? []) as List;
+      final attempts = (s['Attempts'] ?? []) as List;
+      final sent = (s['Sent'] ?? []) as List;
 
       for (var a in attempts) {
         tmpAttempts.add((a['Problem'] as String).trim());
       }
-
       for (var t in sent) {
         final name = (t['Problem'] as String).trim();
         if (isToday) {

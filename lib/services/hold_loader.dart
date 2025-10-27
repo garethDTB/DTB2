@@ -21,15 +21,25 @@ class HoldLoader {
 
       final Map<String, dynamic> decoded = jsonDecode(data);
 
+      final keys = decoded.keys.toList();
+
       return decoded.entries
           .where((e) => e.value is List && e.value.length >= 2)
-          .map(
-            (e) => HoldPoint(
-              label: e.key, // ✅ raw key from Python (A1, Z1, [1, \1, …)
-              x: (e.value[0] as num).toDouble(),
-              y: (e.value[1] as num).toDouble(),
-            ),
-          )
+          .map((e) {
+            final label = e.key; // "A1", "B5", etc
+            final coords = e.value as List;
+
+            // Generate a holdXX id based on index
+            final idx = keys.indexOf(e.key) + 1;
+            final id = "hold$idx";
+
+            return HoldPoint(
+              id: id,
+              label: label,
+              x: (coords[0] as num).toDouble(),
+              y: (coords[1] as num).toDouble(),
+            );
+          })
           .toList();
     } catch (e) {
       return [];

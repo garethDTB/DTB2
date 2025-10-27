@@ -99,8 +99,12 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
     final attempts = _session.attempts;
     final sent = _session.sent;
 
-    final totalAttempts = attempts.fold<int>(0, (sum, a) => sum + a.attempts);
+    final totalAttempts =
+        attempts.fold<int>(0, (sum, a) => sum + a.attempts) +
+        sent.fold<int>(0, (sum, s) => sum + s.attempts);
+
     final totalSent = sent.length;
+
     final avgAttempts = totalSent > 0
         ? (totalAttempts / totalSent).toStringAsFixed(1)
         : "0";
@@ -124,11 +128,7 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
                   "Score: ${_session.score}",
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text(
-                  "Problems sent: $totalSent\n"
-                  "Total attempts: $totalAttempts\n"
-                  "Average attempts per send: $avgAttempts",
-                ),
+                subtitle: Text("Problems sent: $totalSent"),
               ),
             ),
 

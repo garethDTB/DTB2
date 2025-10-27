@@ -32,7 +32,7 @@ class ProblemDetailPage extends StatefulWidget {
   final int numRows;
   final int numCols;
   final String gradeMode;
-  final List<String> superusers; // 👈 NEW
+  final List<String> superusers;
 
   const ProblemDetailPage({
     super.key,
@@ -43,7 +43,7 @@ class ProblemDetailPage extends StatefulWidget {
     required this.numRows,
     required this.numCols,
     this.gradeMode = "french",
-    this.superusers = const [], // 👈 NEW
+    this.superusers = const [],
   });
 
   @override
@@ -87,8 +87,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     baseHeight = 750.0;
 
     _loadMirrorDic();
-    _loadSettings();
-    _loadHoldPositions();
+    _loadHoldPositions().then((_) => _loadSettings()); // ensure holds ready
     _loadGradeMode();
     _loadLikes();
     _loadWallImage();
@@ -186,15 +185,18 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
         final parts = lines[7].split(',').map((e) => e.trim()).toList();
         final opts = <String, String>{};
         for (int i = 0; i + 1 < parts.length; i += 2) {
-          final token = parts[i];
-          final name = parts[i + 1];
+          final token = parts[i]; // e.g. "hold76"
+          final name = parts[i + 1]; // e.g. "Blue"
           if (token.isNotEmpty && name.isNotEmpty) {
-            opts[token] = name;
+            opts[token] = name; // keep raw holdXX → name mapping
           }
         }
+        debugPrint("Loaded foot options: $opts");
         setState(() => footOptions = opts);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("⚠️ Failed to load settings: $e");
+    }
   }
 
   Future<void> _loadHoldPositions() async {
@@ -266,47 +268,69 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
   List<Map<String, String>> _normalizeHolds(dynamic raw) {
     if (raw == null) return [];
-    if (raw is List && raw.isNotEmpty && raw.first is Map) {
-      return raw.map<Map<String, String>>((e) {
-        return {"type": e["type"].toString(), "label": e["label"].toString()};
-      }).toList();
-    }
+
+    // Case 1: list of strings
     if (raw is List && raw.isNotEmpty && raw.first is String) {
       final strHolds = raw.cast<String>();
       final result = <Map<String, String>>[];
-      int feetIndex = strHolds.indexWhere((h) => h.toLowerCase() == "feet");
-      if (feetIndex != -1) {
-        if (strHolds.length >= 2) {
-          result.add({'type': 'start', 'label': strHolds[0]});
-          result.add({'type': 'start', 'label': strHolds[1]});
+
+      final feetIndex = strHolds.indexOf("feet");
+      final problemHolds = feetIndex == -1
+          ? strHolds
+          : strHolds.sublist(0, feetIndex);
+      final footHolds = feetIndex == -1 ? [] : strHolds.sublist(feetIndex + 1);
+
+      for (int i = 0; i < problemHolds.length; i++) {
+        final h = problemHolds[i];
+        if (i == 0 || i == 1) {
+          result.add({'type': 'start', 'label': h});
+        } else if (i == problemHolds.length - 1) {
+          result.add({'type': 'finish', 'label': h});
         } else {
-          result.add({'type': 'start', 'label': strHolds[0]});
-        }
-        if (feetIndex > 1) {
-          result.add({'type': 'finish', 'label': strHolds[feetIndex - 1]});
-        }
-        for (int i = 2; i < feetIndex - 1; i++) {
-          result.add({'type': 'intermediate', 'label': strHolds[i]});
-        }
-        for (int i = feetIndex + 1; i < strHolds.length; i++) {
-          result.add({'type': 'feet', 'label': strHolds[i]});
-        }
-      } else {
-        if (strHolds.length >= 2) {
-          result.add({'type': 'start', 'label': strHolds[0]});
-          result.add({'type': 'start', 'label': strHolds[1]});
-        } else {
-          result.add({'type': 'start', 'label': strHolds[0]});
-        }
-        if (strHolds.length > 3) {
-          for (int i = 2; i < strHolds.length - 1; i++) {
-            result.add({'type': 'intermediate', 'label': strHolds[i]});
-          }
-        }
-        if (strHolds.length > 1) {
-          result.add({'type': 'finish', 'label': strHolds.last});
+          result.add({'type': 'intermediate', 'label': h});
         }
       }
+
+      for (final h in footHolds) {
+        if (h.toLowerCase() != "feet") {
+          result.add({'type': 'feet', 'label': h});
+        }
+      }
+
+      debugPrint("✅ Normalized (strings) → $result");
+      return result;
+    }
+
+    // Case 2: list of maps
+    if (raw is List && raw.isNotEmpty && raw.first is Map) {
+      final result = <Map<String, String>>[];
+      bool seenFeetMarker = false;
+
+      for (int i = 0; i < raw.length; i++) {
+        final e = raw[i];
+        final type = e["type"].toString();
+        final label = e["label"].toString();
+
+        if (label.toLowerCase() == "feet") {
+          seenFeetMarker = true;
+          continue; // skip the marker itself
+        }
+
+        final isLast = (i == raw.length - 1);
+
+        if (isLast) {
+          // ✅ Always keep last hold as finish
+          result.add({"type": "finish", "label": label});
+        } else if (seenFeetMarker) {
+          // ✅ After marker → feet
+          result.add({"type": "feet", "label": label});
+        } else {
+          // ✅ Otherwise keep existing type
+          result.add({"type": type, "label": label});
+        }
+      }
+
+      debugPrint("✅ Normalized (maps) → $result");
       return result;
     }
     return [];
@@ -379,7 +403,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
       await provider.addTick(api, wallId, user, problem);
       HapticFeedback.mediumImpact();
       _updateSwipeMessage(
-        flash ? "Flash logged!" : "Tick logged",
+        flash ? "Flash logged!" : "Well done, keep cranking, Tick logged",
         flash ? Colors.orange : Colors.green,
         clearAfter: 2,
       );
@@ -502,6 +526,8 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   Widget build(BuildContext context) {
     final problem = widget.problems[currentIndex];
     final holdsList = _normalizeHolds(problem['holds']);
+    debugPrint("📋 HoldsList in build(): $holdsList");
+
     final grade = problem['grade'] ?? '';
     final rawName = problem['name'] ?? '';
     String titleText;
@@ -510,6 +536,60 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
       titleText = "$cleanedName (${frenchToVGrade(grade)})";
     } else {
       titleText = rawName.contains(grade) ? rawName : "$rawName ($grade)";
+    }
+
+    // --- Build foot subtitle if footMode == 1 ---
+    // Extract just the hold labels from holdsList
+    // Extract just the hold labels from holdsList
+    final holdLabels = holdsList.map((h) => h['label'] ?? '').toList();
+    debugPrint("Hold labels only: $holdLabels");
+
+    final chosenFeet = <String>[];
+    footOptions.forEach((token, name) {
+      if (holdLabels.contains(token)) {
+        debugPrint("Matched foot: $token → $name");
+        chosenFeet.add(name);
+      } else {
+        debugPrint("No match for foot: $token");
+      }
+    });
+
+    String? footSubtitle;
+
+    if (footMode == 1 && footOptions.isNotEmpty) {
+      // ✅ Mode 1: match against Settings foot holds
+      final holdLabels = holdsList.map((h) => h['label'] ?? '').toList();
+      debugPrint("Problem hold labels: $holdLabels");
+      debugPrint("Foot options: $footOptions");
+
+      final chosenFeet = <String>[];
+      footOptions.forEach((token, name) {
+        if (holdLabels.contains(token)) {
+          debugPrint("Matched foot: $token → $name");
+          chosenFeet.add(name);
+        } else {
+          debugPrint("No match for foot: $token");
+        }
+      });
+
+      if (chosenFeet.isEmpty) {
+        footSubtitle = "Feet: none";
+      } else {
+        footSubtitle = "Feet: ${chosenFeet.join(', ')}";
+      }
+    } else if (footMode == 2) {
+      // ✅ Mode 2: feet come from "feet" keyword in holds
+      final feetLabels = holdsList
+          .where((h) => h['type'] == 'feet')
+          .map((h) => h['label'])
+          .toList();
+      debugPrint("Feet holds (mode 2): $feetLabels");
+
+      if (feetLabels.isNotEmpty) {
+        footSubtitle = "Feet holds: ${feetLabels.join(', ')}";
+      } else {
+        footSubtitle = "Feet: none";
+      }
     }
 
     final provider = context.watch<ProblemsProvider>();
@@ -524,7 +604,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
     final attemptCount = _attemptCounts[rawName] ?? 0;
 
-    // 👇 NEW: canEdit logic
     final auth = context.watch<AuthState>();
     final username = (auth.username ?? "").toLowerCase();
     final setter = (problem['setter'] ?? "").toString().toLowerCase();
@@ -541,14 +620,26 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: headerColor,
-          title: Text(titleText),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titleText),
+              if (footSubtitle != null)
+                Text(
+                  footSubtitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+                ),
+            ],
+          ),
           actions: [
-            if (canEdit) // 👈 NEW
+            if (canEdit)
               IconButton(
                 icon: const Icon(Icons.edit),
                 onPressed: () {
                   final row = [
-                    problem['id'] ?? '', // 👈 store the Cosmos id at index 0
+                    problem['id'] ?? '',
                     problem['name'] ?? '',
                     problem['grade'] ?? '',
                     problem['comment'] ?? '',
@@ -556,7 +647,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
                     (problem['stars'] ?? '1').toString(),
                     ...(problem['holds'] as List).map((h) => h.toString()),
                   ];
-
                   context.push(
                     "/create",
                     extra: {

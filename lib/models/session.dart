@@ -1,31 +1,23 @@
 class Attempt {
   final String problem;
-  final String user;
-  final String wall;
+  final String grade;
   final int attempts;
 
-  Attempt({
-    required this.problem,
-    required this.user,
-    required this.wall,
-    required this.attempts,
-  });
+  Attempt({required this.problem, required this.grade, required this.attempts});
 
   factory Attempt.fromJson(Map<String, dynamic> json) {
     return Attempt(
       problem: json['Problem'] ?? '',
-      user: json['User'] ?? '',
-      wall: json['Wall'] ?? '',
-      attempts: json['Attempts'] ?? 0,
+      grade: json['Grade'] ?? '',
+      attempts: json['Number'] ?? 0, // normalize "Number" → attempts
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       "Problem": problem,
-      "User": user,
-      "Wall": wall,
-      "Attempts": attempts,
+      "Grade": grade,
+      "Number": attempts, // always write back as "Number"
     };
   }
 }
@@ -54,12 +46,15 @@ class SentProblem {
   });
 
   factory SentProblem.fromJson(Map<String, dynamic> json) {
+    int rawAttempts = json['Attempts'] ?? 0;
+
     return SentProblem(
       problem: json['Problem'] ?? '',
       grade: json['Grade'] ?? '',
       user: json['User'] ?? '',
       wall: json['Wall'] ?? '',
-      attempts: json['Attempts'] ?? 0,
+      // ensure at least 1 attempt if it was actually sent
+      attempts: rawAttempts == 0 ? 1 : rawAttempts,
       notes: json['Notes'],
       tooHard: json['TooHard'],
       tooEasy: json['TooEasy'],

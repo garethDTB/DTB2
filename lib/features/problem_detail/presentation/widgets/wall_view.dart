@@ -59,6 +59,9 @@ class WallView extends StatelessWidget {
                       children: [
                         Positioned.fill(child: bg),
                         ...holdsList.map((hold) {
+                          debugPrint(
+                            "🎯 Drawing hold: type=${hold['type']}, label=${hold['label']}",
+                          );
                           final rawHoldId = hold['label']!;
                           var holdLabel = HoldUtils.convertHoldId(
                             rawHoldId,
