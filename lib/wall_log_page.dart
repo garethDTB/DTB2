@@ -594,61 +594,79 @@ class _WallLogPageState extends State<WallLogPage> {
                 if (walls.isEmpty)
                   const Center(child: CircularProgressIndicator())
                 else
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton2<String>(
-                      isExpanded: true,
-                      hint: const Text('Select a wall'),
-                      value:
-                          (selectedWall != null &&
-                              walls.any((w) => w['appName'] == selectedWall))
-                          ? selectedWall
-                          : null,
-                      items: walls.map((w) {
-                        final appName = (w['appName'] ?? '').trim();
-                        final userName = (w['userName'] ?? 'Unnamed').trim();
-                        final isHighlight = appName == _highlightWall;
-                        return DropdownMenuItem<String>(
-                          value: appName,
-                          child: Text(
-                            userName,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: isHighlight
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isHighlight ? Colors.blue : null,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) _enterWall(value.trim());
-                      },
-                      dropdownSearchData: DropdownSearchData(
-                        searchController: _searchController,
-                        searchInnerWidgetHeight: 60,
-                        searchInnerWidget: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: const InputDecoration(
-                              hintText: 'Search walls...',
-                              border: OutlineInputBorder(),
+                  Container(
+                    // 👇 ensure dropdown has room to render
+                    constraints: const BoxConstraints(
+                      minHeight: 56,
+                      maxHeight: 70,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton2<String>(
+                        isExpanded: true,
+                        hint: const Text('Select a wall'),
+                        dropdownStyleData: const DropdownStyleData(
+                          useSafeArea:
+                              true, // 👈 ensures safe popup area on iOS
+                          elevation: 8,
+                        ),
+                        menuItemStyleData: const MenuItemStyleData(height: 48),
+                        buttonStyleData: const ButtonStyleData(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.all(Radius.circular(8)),
+                            border: Border.fromBorderSide(
+                              BorderSide(color: Colors.grey),
                             ),
                           ),
                         ),
-                        searchMatchFn: (item, searchValue) {
-                          final wall = walls.firstWhere(
-                            (w) => w['appName'] == item.value,
-                            orElse: () => {},
+                        items: walls.map((w) {
+                          final appName = (w['appName'] ?? '').trim();
+                          final userName = (w['userName'] ?? 'Unnamed').trim();
+                          final isHighlight = appName == _highlightWall;
+                          return DropdownMenuItem<String>(
+                            value: appName,
+                            child: Text(
+                              userName,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: isHighlight
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: isHighlight ? Colors.blue : null,
+                              ),
+                            ),
                           );
-                          return (wall['appName'] ?? "").toLowerCase().contains(
-                                searchValue.toLowerCase(),
-                              ) ||
-                              (wall['userName'] ?? "").toLowerCase().contains(
-                                searchValue.toLowerCase(),
-                              );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) _enterWall(value.trim());
                         },
+                        dropdownSearchData: DropdownSearchData(
+                          searchController: _searchController,
+                          searchInnerWidgetHeight: 60,
+                          searchInnerWidget: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: const InputDecoration(
+                                hintText: 'Search walls...',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          searchMatchFn: (item, searchValue) {
+                            final wall = walls.firstWhere(
+                              (w) => w['appName'] == item.value,
+                              orElse: () => {},
+                            );
+                            return (wall['appName'] ?? "")
+                                    .toLowerCase()
+                                    .contains(searchValue.toLowerCase()) ||
+                                (wall['userName'] ?? "").toLowerCase().contains(
+                                  searchValue.toLowerCase(),
+                                );
+                          },
+                        ),
                       ),
                     ),
                   ),
