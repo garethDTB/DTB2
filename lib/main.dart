@@ -143,6 +143,17 @@ class _ClimbLightAppState extends State<ClimbLightApp>
         useMaterial3: true,
       ),
       routerConfig: router,
+
+      // 👇 Add this builder to clamp text scaling globally
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final clampedTextScale = mediaQuery.textScaleFactor.clamp(1.0, 1.3);
+        return MediaQuery(
+          data: mediaQuery.copyWith(textScaleFactor: clampedTextScale),
+          child: child!,
+        );
+      },
     );
+    ;
   }
 }
