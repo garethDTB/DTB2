@@ -13,7 +13,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _autoSend = false;
 
   bool _showGuide = false;
-  final List<bool> _expanded = List.filled(6, false); // one extra for "Create"
+  final List<bool> _expanded = List.filled(6, false); // 6 sections total
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _guideKey = GlobalKey();
 
@@ -167,12 +167,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   index: 0,
                   title: "Filters",
                   content:
-                      "Filters let you quickly focus your wall log:\n\n"
-                      "• **Grade Filter** — View problems of a single grade.\n"
-                      "• **Search Bar** — Find problems by any word or phrase.\n"
-                      "• **Benchmarks** — Show only benchmark problems.\n"
-                      "• **Reset Filters** — Clear all filters and return to full view.\n\n"
-                      "Active filters appear in red to remind you they’re on.",
+                      "The filters and search bar help you quickly find the problems you want:\n\n"
+                      "• 🧩 **Grade Filter** — Use the dropdown to show only problems of a single grade (e.g. just 6c or 7a+).\n"
+                      "• 🔎 **Search Bar** — Type any word or phrase to search by name, setter, grade, or comment.\n"
+                      "• ❤️ **Liked** — Shows problems you’ve liked.\n"
+                      "• ❌ **Attempted (not ticked)** — Problems you’ve tried but not yet completed.\n"
+                      "• ✅ **Ticked** — Problems you’ve completed.\n"
+                      "• ⚪ **Not ticked** — Problems you haven’t attempted or logged yet.\n"
+                      "• ⭐ **Benchmarks** — Shows only benchmark problems.\n\n"
+                      "Tap an icon to toggle its filter — active ones highlight in colour.\n"
+                      "Use the 🔄 **Reset** button (which turns red when filters are active) to clear everything and return to the full list.",
                 ),
 
                 // 1. Colour Meaning
@@ -180,10 +184,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   index: 1,
                   title: "Colour Meaning",
                   content:
-                      "• 🟣 **Purple** — Benchmark problems used for grade consistency.\n"
-                      "• 🔴 **Red** — Projects you’re still working on.\n"
-                      "• 🟢 **Green** — Problems you’ve sent.\n\n"
-                      "Colours make it easy to spot progress and benchmarks at a glance.",
+                      "• 🟢 **Green** — A problem you’ve completed in today’s session.\n"
+                      "• 🟣 **Purple** — A problem you’ve completed in a previous session.\n"
+                      "• 🔴 **Red** — A problem you’ve attempted but not ticked yet.\n"
+                      "• ⚪ **White** — A problem you’ve not attempted or ticked yet.\n\n"
+                      "Colours give you a quick visual snapshot of your progress on the wall — what’s new, what’s done, and what’s still waiting.",
                 ),
 
                 // 2. Create
@@ -203,17 +208,21 @@ class _SettingsPageState extends State<SettingsPage> {
                       "🟢 Start • 🔴 Finish • 🔵 Intermediate • 🟡 Feet (if enabled).",
                 ),
 
-                // 3. Problem App Bar
+                // 3. Problems App Bar
                 _buildExpandableSection(
                   index: 3,
                   title: "Problems App Bar",
                   content:
-                      "The top bar in each problem’s details page gives quick access to key actions:\n\n"
-                      "• ✏️ **Edit** — Change problem details or holds.\n"
-                      "• 💬 **Comments** — View or add discussion.\n"
-                      "• 📤 **Send** — Display the problem on your board.\n"
-                      "• 🗑️ **Delete** — Remove a problem you created.\n\n"
-                      "Everything related to managing a problem lives here.",
+                      "The buttons in the details view let you record your session and interact with the problem quickly:\n\n"
+                      "• ❤️ **Like** — Show appreciation for a problem.\n"
+                      "• ❌ **Attempt** — Log that you’ve tried the problem but haven’t sent it yet.\n"
+                      "• ✅ **Tick** — Mark the problem as completed in this session.\n"
+                      "• ⚡ **Flash** — Record that you sent it on your first attempt.\n"
+                      "• 💡 **Send to Board** — Push the problem to your connected training board.\n"
+                      "• 🔄 **Mirror** — Toggle a mirrored version of the problem on the opposite side.\n"
+                      "• 📺 **What’s On** — See what’s currently loaded on the board.\n"
+                      "• 💬 **Comments** — View or add feedback from other climbers.\n\n"
+                      "👉 Swipe sideways if you don’t see all the buttons — the row scrolls horizontally.",
                 ),
 
                 // 4. Drafts
@@ -221,11 +230,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   index: 4,
                   title: "Drafts",
                   content:
-                      "Drafts are problems you’ve started but not yet uploaded.\n\n"
+                      "Drafts are unfinished problems you’ve started creating but haven’t yet sent.\n\n"
                       "• Drafts stay local until you publish or send them.\n"
                       "• Other people are not able to see them.\n"
-                      "• Great for testing ideas before uploading.\n"
-                      "• You can create up to **10 drafts** at a time.",
+                      "• Great for testing ideas before uploading.\n\n"
+                      "💡 Use drafts to experiment or build multiple climbs before finalising your set.\n"
+                      "You can create up to 10 drafts at a time.",
                 ),
 
                 // 5. Sending to the Wall
@@ -233,12 +243,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   index: 5,
                   title: "Sending to the Wall",
                   content:
-                      "When you tap **Send to Board**, the problem will appear on the wall if your device is connected to the internet.\n\n"
+                      "When you tap **Send to Board**, the problem will appear on the wall if your device is connected through the internet.\n\n"
                       "• 🟢 **Green holds** — Starting positions\n"
                       "• 🔴 **Red holds** — Finishing positions\n"
                       "• 🔵 **Blue holds** — Intermediate or optional holds\n"
                       "• 🟡 **Yellow holds** — Tracked holds (only on boards that support hold tracking)\n\n"
-                      "💡 If you see a 🚫 **phone symbol** on the wall tablet, the system is restricted — tap it to remove the restriction and allow mobile devices to connect.",
+                      "💡 Make sure your phone or tablet is connected before sending.\n"
+                      "If you see a 🚫 **phone symbol** on the wall tablet, it means the system is restricted — tap it to remove the restriction and allow mobile devices to connect.",
                 ),
               ],
             ),
