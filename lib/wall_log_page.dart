@@ -570,7 +570,11 @@ class _WallLogPageState extends State<WallLogPage> {
       children: [
         Scaffold(
           appBar: AppBar(
-            title: const Text("Select a wall"),
+            title: Text(
+              selectedWall == null
+                  ? "Select a Wall"
+                  : "${_findWall(selectedWall!)?['userName'] ?? 'Unknown Wall'} Selected",
+            ),
             actions: [
               IconButton(
                 tooltip: "Log out",
@@ -586,6 +590,7 @@ class _WallLogPageState extends State<WallLogPage> {
               ),
             ],
           ),
+
           body: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(

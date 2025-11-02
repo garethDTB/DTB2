@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sticky_grouped_list/sticky_grouped_list.dart';
 import 'package:path_provider/path_provider.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'features/problem_detail/presentation/problem_detail_page.dart';
 import 'create_problem_page.dart'; // ✅ needed for draft editing
 import 'settings_page.dart';
@@ -36,10 +35,12 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
 
   List<Map<String, dynamic>> _draftProblems = [];
   bool _loadingDrafts = false;
+  String? wallDisplayName;
 
   @override
   void initState() {
     super.initState();
+    _loadWallName();
     if (widget.isDraftMode) {
       _loadDrafts();
     } else {
@@ -49,6 +50,21 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         final auth = context.read<AuthState>();
         await provider.load(widget.wallId, api, auth.username!);
       });
+    }
+  }
+
+  Future<void> _loadWallName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final wallJson = prefs.getString('lastSelectedWall');
+      if (wallJson != null) {
+        final wall = Map<String, dynamic>.from(jsonDecode(wallJson));
+        if (wall['appName'] == widget.wallId) {
+          setState(() => wallDisplayName = wall['userName']);
+        }
+      }
+    } catch (e) {
+      debugPrint("⚠️ Failed to load wall display name: $e");
     }
   }
 
@@ -188,7 +204,11 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isDraftMode ? "Draft Problems" : "Problems"),
+        title: Text(
+          widget.isDraftMode
+              ? "Draft Problems"
+              : "${wallDisplayName ?? widget.wallId} Problems",
+        ),
         actions: [
           if (!widget.isDraftMode)
             IconButton(

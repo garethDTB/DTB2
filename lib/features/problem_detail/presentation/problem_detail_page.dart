@@ -466,6 +466,8 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
   Future<void> _loadWhatsOn() async {
     final api = context.read<ApiService>();
+    final provider = context.read<ProblemsProvider>();
+
     try {
       final whatsOn = await api.getWhatsOn(widget.wallId);
       if (whatsOn == null) {
@@ -476,16 +478,21 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
         );
         return;
       }
+
       final problemName = (whatsOn['Problem'] ?? '').trim();
-      final idx = widget.problems.indexWhere(
+
+      // ✅ Always search in the unfiltered full list
+      final idx = provider.allProblems.indexWhere(
         (p) => (p['name'] ?? '').trim() == problemName,
       );
 
       if (idx != -1) {
         setState(() {
+          // Switch the detail view to show the correct problem
           currentIndex = idx;
           isMirrored = whatsOn['IsMirrored'] ?? false;
         });
+
         _updateSwipeMessage(
           "Now showing: $problemName",
           Colors.green,

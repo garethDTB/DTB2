@@ -1575,53 +1575,55 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
         ),
       ),
       actions: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-
-            OutlinedButton(
-              onPressed: () {
-                final feetTokens = chosenFeetTokens.entries
-                    .where((e) => e.value)
-                    .map((e) => e.key)
-                    .toList();
-                widget.onSave(
-                  nameCtrl.text.trim(),
-                  commentCtrl.text.trim(),
-                  grade ?? grades.first,
-                  stars,
-                  feetTokens,
-                  draft: true,
-                );
-                Navigator.pop(context);
-              },
-              child: const Text("Save Draft"),
-            ),
-
-            ElevatedButton(
-              onPressed: () {
-                final feetTokens = chosenFeetTokens.entries
-                    .where((e) => e.value)
-                    .map((e) => e.key)
-                    .toList();
-                widget.onSave(
-                  nameCtrl.text.trim(),
-                  commentCtrl.text.trim(),
-                  grade ?? grades.first,
-                  stars,
-                  feetTokens,
-                  draft: false,
-                );
-                Navigator.pop(context);
-              },
-              // 👇 show "Update" instead of "Save" when editing
-              child: Text(widget.editingProblem ? "Update" : "Save"),
-            ),
-          ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  final feetTokens = chosenFeetTokens.entries
+                      .where((e) => e.value)
+                      .map((e) => e.key)
+                      .toList();
+                  widget.onSave(
+                    nameCtrl.text.trim(),
+                    commentCtrl.text.trim(),
+                    grade ?? grades.first,
+                    stars,
+                    feetTokens,
+                    draft: true,
+                  );
+                  Navigator.pop(context);
+                },
+                child: const Text("Save Draft"),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final feetTokens = chosenFeetTokens.entries
+                      .where((e) => e.value)
+                      .map((e) => e.key)
+                      .toList();
+                  widget.onSave(
+                    nameCtrl.text.trim(),
+                    commentCtrl.text.trim(),
+                    grade ?? grades.first,
+                    stars,
+                    feetTokens,
+                    draft: false,
+                  );
+                  Navigator.pop(context);
+                },
+                child: Text(widget.editingProblem ? "Update" : "Save"),
+              ),
+            ],
+          ),
         ),
       ],
     );

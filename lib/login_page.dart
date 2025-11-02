@@ -58,105 +58,233 @@ class _LoginPageState extends State<LoginPage> {
     final regConfirmCtrl = TextEditingController();
     final regNameCtrl = TextEditingController();
 
+    final scrollCtrl = ScrollController();
+
+    // Focus nodes for smart focus handling
+    final userFocus = FocusNode();
+    final emailFocus = FocusNode();
+    final passFocus = FocusNode();
+    final confirmFocus = FocusNode();
+    final nameFocus = FocusNode();
+
+    // Helper to scroll focused field into view
+    void scrollToField(FocusNode node) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scrollCtrl.hasClients) return;
+        final box = node.context?.findRenderObject() as RenderBox?;
+        if (box != null) {
+          final yPos = box.localToGlobal(Offset.zero).dy;
+          final screenHeight = MediaQuery.of(context).size.height;
+          // if it's too low (covered by keyboard), scroll up
+          if (yPos > screenHeight * 0.5) {
+            scrollCtrl.animateTo(
+              scrollCtrl.offset + 120,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            );
+          }
+        }
+      });
+    }
+
+    // Attach listeners to focus changes
+    for (var node in [
+      userFocus,
+      emailFocus,
+      passFocus,
+      confirmFocus,
+      nameFocus,
+    ]) {
+      node.addListener(() {
+        if (node.hasFocus) scrollToField(node);
+      });
+    }
+
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("Register"),
-          content: SingleChildScrollView(
-            child: Form(
-              key: regForm,
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: regUserCtrl,
-                    decoration: const InputDecoration(labelText: "Username"),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? "Enter a username" : null,
-                  ),
-                  TextFormField(
-                    controller: regEmailCtrl,
-                    decoration: const InputDecoration(labelText: "Email"),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? "Enter an email" : null,
-                  ),
-                  TextFormField(
-                    controller: regPassCtrl,
-                    decoration: const InputDecoration(labelText: "Password"),
-                    obscureText: true,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? "Enter a password" : null,
-                  ),
-                  TextFormField(
-                    controller: regConfirmCtrl,
-                    decoration: const InputDecoration(
-                      labelText: "Confirm Password",
-                    ),
-                    obscureText: true,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) {
-                        return "Confirm your password";
-                      }
-                      if (v != regPassCtrl.text) {
-                        return "Passwords do not match";
-                      }
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: regNameCtrl,
-                    decoration: const InputDecoration(labelText: "Real Name"),
-                  ),
-                ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 20,
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: const Text("Cancel"),
-              onPressed: () => Navigator.pop(context),
-            ),
-            ElevatedButton(
-              child: const Text("Register"),
-              onPressed: () async {
-                if (regForm.currentState?.validate() ?? false) {
-                  try {
-                    final ok = await auth.register(
-                      api,
-                      regUserCtrl.text.trim(),
-                      regEmailCtrl.text.trim(),
-                      regPassCtrl.text.trim(),
-                      displayName: regNameCtrl.text.trim().isEmpty
-                          ? null
-                          : regNameCtrl.text.trim(),
-                    );
-                    Navigator.pop(context);
-                    if (ok) {
+              title: const Text("Register"),
+              content: LayoutBuilder(
+                builder: (context, constraints) {
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(context).viewInsets.bottom,
+                      ),
+                      child: Scrollbar(
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: scrollCtrl,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Form(
+                            key: regForm,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TextFormField(
+                                  controller: regUserCtrl,
+                                  focusNode: userFocus,
+                                  decoration: const InputDecoration(
+                                    labelText: "Username",
+                                  ),
+                                  textInputAction: TextInputAction.next,
+                                  validator: (v) => v == null || v.isEmpty
+                                      ? "Enter a username"
+                                      : null,
+                                  onFieldSubmitted: (_) =>
+                                      emailFocus.requestFocus(),
+                                ),
+                                TextFormField(
+                                  controller: regEmailCtrl,
+                                  focusNode: emailFocus,
+                                  decoration: const InputDecoration(
+                                    labelText: "Email",
+                                  ),
+                                  keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.next,
+                                  validator: (v) => v == null || v.isEmpty
+                                      ? "Enter an email"
+                                      : null,
+                                  onFieldSubmitted: (_) =>
+                                      passFocus.requestFocus(),
+                                ),
+                                TextFormField(
+                                  controller: regPassCtrl,
+                                  focusNode: passFocus,
+                                  decoration: const InputDecoration(
+                                    labelText: "Password",
+                                  ),
+                                  obscureText: true,
+                                  textInputAction: TextInputAction.next,
+                                  validator: (v) => v == null || v.isEmpty
+                                      ? "Enter a password"
+                                      : null,
+                                  onFieldSubmitted: (_) =>
+                                      confirmFocus.requestFocus(),
+                                ),
+                                TextFormField(
+                                  controller: regConfirmCtrl,
+                                  focusNode: confirmFocus,
+                                  decoration: const InputDecoration(
+                                    labelText: "Confirm Password",
+                                  ),
+                                  obscureText: true,
+                                  textInputAction: TextInputAction.next,
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) {
+                                      return "Confirm your password";
+                                    }
+                                    if (v != regPassCtrl.text) {
+                                      return "Passwords do not match";
+                                    }
+                                    return null;
+                                  },
+                                  onFieldSubmitted: (_) =>
+                                      nameFocus.requestFocus(),
+                                ),
+                                TextFormField(
+                                  controller: regNameCtrl,
+                                  focusNode: nameFocus,
+                                  decoration: const InputDecoration(
+                                    labelText: "Real Name",
+                                  ),
+                                  textInputAction: TextInputAction.done,
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              actions: [
+                TextButton(
+                  child: const Text("Cancel"),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                ElevatedButton(
+                  child: const Text("Register"),
+                  onPressed: () async {
+                    if (!(regForm.currentState?.validate() ?? false)) {
+                      await Future.delayed(const Duration(milliseconds: 100));
+
+                      if (regUserCtrl.text.isEmpty) {
+                        userFocus.requestFocus();
+                      } else if (regEmailCtrl.text.isEmpty) {
+                        emailFocus.requestFocus();
+                      } else if (regPassCtrl.text.isEmpty) {
+                        passFocus.requestFocus();
+                      } else if (regConfirmCtrl.text != regPassCtrl.text) {
+                        confirmFocus.requestFocus();
+                      } else {
+                        nameFocus.requestFocus();
+                      }
+                      return;
+                    }
+
+                    try {
+                      final ok = await auth.register(
+                        api,
+                        regUserCtrl.text.trim(),
+                        regEmailCtrl.text.trim(),
+                        regPassCtrl.text.trim(),
+                        displayName: regNameCtrl.text.trim().isEmpty
+                            ? null
+                            : regNameCtrl.text.trim(),
+                      );
+                      Navigator.pop(context);
+                      if (ok) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Registration successful. Please log in.",
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            "Registration successful. Please log in.",
+                            e.toString().replaceAll("Exception: ", ""),
                           ),
                         ),
                       );
                     }
-                  } catch (e) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          e.toString().replaceAll("Exception: ", ""),
-                        ),
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-          ],
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );
+
+    // Cleanup
+    for (var node in [
+      userFocus,
+      emailFocus,
+      passFocus,
+      confirmFocus,
+      nameFocus,
+    ]) {
+      node.dispose();
+    }
   }
 
   Future<void> _showResetDialog(AuthState auth, ApiService api) async {

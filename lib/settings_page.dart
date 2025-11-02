@@ -13,7 +13,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _autoSend = false;
 
   bool _showGuide = false;
-  final List<bool> _expanded = List.filled(6, false); // 6 sections total
+  final List<bool> _expanded = List.filled(7, false); // now 7 sections total
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _guideKey = GlobalKey();
 
@@ -208,9 +208,22 @@ class _SettingsPageState extends State<SettingsPage> {
                       "🟢 Start • 🔴 Finish • 🔵 Intermediate • 🟡 Feet (if enabled).",
                 ),
 
-                // 3. Problems App Bar
+                // ✏️ 3. Editing
                 _buildExpandableSection(
                   index: 3,
+                  title: "Editing",
+                  content:
+                      "If a problem was **created by you**, you can edit it directly from the **details page**.\n\n"
+                      "• Tap the ✏️ **pencil icon** to enter edit mode.\n"
+                      "• You can change the **name**, **comments**, and **grade**.\n"
+                      "• You can also reselect or adjust your **start** and **finish** holds.\n"
+                      "• Once updated, just save to apply your changes.\n\n"
+                      "Other users’ problems cannot be edited, but you can copy or recreate them using **Create Problem**.",
+                ),
+
+                // 4. Problems App Bar
+                _buildExpandableSection(
+                  index: 4,
                   title: "Problems App Bar",
                   content:
                       "The buttons in the details view let you record your session and interact with the problem quickly:\n\n"
@@ -225,9 +238,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       "👉 Swipe sideways if you don’t see all the buttons — the row scrolls horizontally.",
                 ),
 
-                // 4. Drafts
+                // 5. Drafts
                 _buildExpandableSection(
-                  index: 4,
+                  index: 5,
                   title: "Drafts",
                   content:
                       "Drafts are unfinished problems you’ve started creating but haven’t yet sent.\n\n"
@@ -238,9 +251,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       "You can create up to 10 drafts at a time.",
                 ),
 
-                // 5. Sending to the Wall
+                // 6. Sending to the Wall
                 _buildExpandableSection(
-                  index: 5,
+                  index: 6,
                   title: "Sending to the Wall",
                   content:
                       "When you tap **Send to Board**, the problem will appear on the wall if your device is connected through the internet.\n\n"
