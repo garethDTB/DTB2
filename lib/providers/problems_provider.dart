@@ -364,4 +364,18 @@ class ProblemsProvider extends ChangeNotifier {
     attemptedProblems.add(problem['name'] ?? '');
     notifyListeners();
   }
+
+  /// ✅ True if any filter, search, or grade restriction is currently applied
+  bool get isFilterActive {
+    // No filter means the lists are identical length
+    return filteredProblems.length != allProblems.length ||
+        (selectedGrade != null && selectedGrade!.isNotEmpty);
+  }
+
+  /// ✅ Clears all filters and restores the full problem list
+  void clearFilters() {
+    filteredProblems = List.from(allProblems);
+    selectedGrade = null;
+    notifyListeners();
+  }
 }

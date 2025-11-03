@@ -480,31 +480,33 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
       }
 
       final problemName = (whatsOn['Problem'] ?? '').trim();
+      final isMirrored = whatsOn['IsMirrored'] ?? false;
 
-      // ✅ Always search in the unfiltered full list
-      final idx = provider.allProblems.indexWhere(
+      // ✅ Look for the problem in the *filtered* list first
+      final idxFiltered = provider.filteredProblems.indexWhere(
         (p) => (p['name'] ?? '').trim() == problemName,
       );
 
-      if (idx != -1) {
+      if (idxFiltered != -1) {
+        // 🎯 Found in current filtered list → show it normally
         setState(() {
-          // Switch the detail view to show the correct problem
-          currentIndex = idx;
-          isMirrored = whatsOn['IsMirrored'] ?? false;
+          currentIndex = idxFiltered;
+          this.isMirrored = isMirrored;
         });
-
         _updateSwipeMessage(
           "Now showing: $problemName",
           Colors.green,
           clearAfter: 2,
         );
-      } else {
-        _updateSwipeMessage(
-          "Problem not found locally",
-          Colors.orange,
-          clearAfter: 2,
-        );
+        return;
       }
+
+      // 🚫 Not in filtered list → tell user to clear filters
+      _updateSwipeMessage(
+        "‘$problemName’ is hidden by your filters.\nPlease clear filters to view it.",
+        Colors.orange,
+        clearAfter: 3,
+      );
     } catch (e) {
       _updateSwipeMessage(
         "Failed to load What's On",
@@ -531,23 +533,54 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final problem = widget.problems[currentIndex];
+    // ✅ Access provider
+    final provider = context.watch<ProblemsProvider>();
+
+    // ✅ Pick which list to use (filtered or all)
+    final problems = provider.filteredProblems.isNotEmpty
+        ? provider.filteredProblems
+        : provider.allProblems;
+
+    // 🧭 Debugging info
+    debugPrint('🧩 BUILDING ProblemDetailPage ----------------------');
+    debugPrint('currentIndex = $currentIndex');
+    debugPrint('filteredProblems.length = ${provider.filteredProblems.length}');
+    debugPrint('allProblems.length = ${provider.allProblems.length}');
+    debugPrint('isFilterActive = ${provider.isFilterActive}');
+    debugPrint(
+      'usingList = ${provider.filteredProblems.isNotEmpty ? 'filteredProblems' : 'allProblems'}',
+    );
+
+    // ✅ Prevent RangeError if filter reduces list size
+    if (currentIndex < 0 || currentIndex >= problems.length) {
+      debugPrint('❌ Index $currentIndex out of range! Clamping...');
+      currentIndex = problems.isEmpty ? 0 : problems.length - 1;
+    }
+
+    // ✅ Safe access to the current problem
+    final problem = problems.isNotEmpty
+        ? problems[currentIndex]
+        : {'name': 'No problems available', 'grade': '', 'holds': []};
+
+    // ✅ Normalize holds for drawing
     final holdsList = _normalizeHolds(problem['holds']);
     debugPrint("📋 HoldsList in build(): $holdsList");
 
-    final grade = problem['grade'] ?? '';
-    final rawName = problem['name'] ?? '';
+    // ✅ Grade display logic (French ↔ V-grade safe)
+    final grade = (problem['grade'] ?? '').trim();
+    final rawName = (problem['name'] ?? '').trim();
     String titleText;
-    if (gradeMode == "vgrade") {
+
+    if (grade.isEmpty) {
+      titleText = rawName;
+    } else if (gradeMode == "vgrade") {
       final cleanedName = rawName.replaceAll(grade, "").trim();
       titleText = "$cleanedName (${frenchToVGrade(grade)})";
     } else {
       titleText = rawName.contains(grade) ? rawName : "$rawName ($grade)";
     }
 
-    // --- Build foot subtitle if footMode == 1 ---
-    // Extract just the hold labels from holdsList
-    // Extract just the hold labels from holdsList
+    // ✅ Build foot subtitle if needed
     final holdLabels = holdsList.map((h) => h['label'] ?? '').toList();
     debugPrint("Hold labels only: $holdLabels");
 
@@ -562,36 +595,17 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     });
 
     String? footSubtitle;
-
     if (footMode == 1 && footOptions.isNotEmpty) {
-      // ✅ Mode 1: match against Settings foot holds
-      final holdLabels = holdsList.map((h) => h['label'] ?? '').toList();
-      debugPrint("Problem hold labels: $holdLabels");
-      debugPrint("Foot options: $footOptions");
-
-      final chosenFeet = <String>[];
-      footOptions.forEach((token, name) {
-        if (holdLabels.contains(token)) {
-          debugPrint("Matched foot: $token → $name");
-          chosenFeet.add(name);
-        } else {
-          debugPrint("No match for foot: $token");
-        }
-      });
-
       if (chosenFeet.isEmpty) {
         footSubtitle = "Feet: none";
       } else {
         footSubtitle = "Feet: ${chosenFeet.join(', ')}";
       }
     } else if (footMode == 2) {
-      // ✅ Mode 2: feet come from "feet" keyword in holds
       final feetLabels = holdsList
           .where((h) => h['type'] == 'feet')
           .map((h) => h['label'])
           .toList();
-      debugPrint("Feet holds (mode 2): $feetLabels");
-
       if (feetLabels.isNotEmpty) {
         footSubtitle = "Feet holds: ${feetLabels.join(', ')}";
       } else {
@@ -599,7 +613,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
       }
     }
 
-    final provider = context.watch<ProblemsProvider>();
+    // ✅ Problem status colour (attempted/ticked)
     Color? headerColor;
     if (provider.tickedProblemsToday.contains(rawName)) {
       headerColor = Colors.green.shade100;
@@ -610,7 +624,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     }
 
     final attemptCount = _attemptCounts[rawName] ?? 0;
-
     final auth = context.watch<AuthState>();
     final username = (auth.username ?? "").toLowerCase();
     final setter = (problem['setter'] ?? "").toString().toLowerCase();
@@ -619,6 +632,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
         (username == setter ||
             widget.superusers.map((s) => s.toLowerCase()).contains(username));
 
+    // ✅ Return main layout
     return WillPopScope(
       onWillPop: () async {
         Navigator.pop(context);
