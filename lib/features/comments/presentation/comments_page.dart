@@ -94,6 +94,7 @@ class _CommentsPageState extends State<CommentsPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                // 💬 Comments list
                 Expanded(
                   child: _comments.isEmpty
                       ? const Center(child: Text("No comments yet"))
@@ -115,28 +116,33 @@ class _CommentsPageState extends State<CommentsPage> {
                           },
                         ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _controller,
-                          decoration: const InputDecoration(
-                            labelText: "Your comment",
-                            border: OutlineInputBorder(),
+
+                // 🧷 Input box always visible and safe
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            decoration: const InputDecoration(
+                              labelText: "Your comment",
+                              border: OutlineInputBorder(),
+                            ),
+                            minLines: 1,
+                            maxLines: 3,
                           ),
-                          minLines: 1,
-                          maxLines: 3,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: _saveComment,
-                        icon: const Icon(Icons.send),
-                        label: const Text("Save"),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _saveComment,
+                          icon: const Icon(Icons.send),
+                          label: const Text("Save"),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
