@@ -99,8 +99,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       try {
         final api = ApiService(
-          "https://YOUR_AZURE_FUNCTION_URL",
-        ); // <-- update this
+          "https://dtb2-func-hkhagfe5gkfaa0g9.ukwest-01.azurewebsites.net/api",
+        );
+
         final success = await api.deleteAccount(username, password);
 
         if (success) {
