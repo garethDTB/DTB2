@@ -24,6 +24,8 @@ import 'widgets/action_buttons_row.dart';
 import 'widgets/swipe_hint_arrow.dart';
 import 'widgets/legend_bar.dart';
 
+bool _mirrorAvailable = false;
+
 class ProblemDetailPage extends StatefulWidget {
   final String wallId;
   final Map<String, dynamic> problem;
@@ -193,6 +195,13 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
         }
         debugPrint("Loaded foot options: $opts");
         setState(() => footOptions = opts);
+      }
+      if (lines.length >= 3) {
+        final mirrorValue = int.tryParse(lines[2]) ?? 0;
+        setState(() => _mirrorAvailable = mirrorValue == 1);
+        debugPrint(
+          "🪞 Mirror setting value: $mirrorValue → available: $_mirrorAvailable",
+        );
       }
     } catch (e) {
       debugPrint("⚠️ Failed to load settings: $e");
@@ -738,11 +747,14 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
                 onFlash: () => _addTick(context, flash: true),
                 onSendToBoard: _sendToBoard,
                 isMirrored: isMirrored,
-                onMirrorToggle: () {
-                  setState(() => isMirrored = !isMirrored);
-                  HapticFeedback.selectionClick();
-                  if (autoSendToBoard) _sendToBoard();
-                },
+                onMirrorToggle: _mirrorAvailable
+                    ? () {
+                        setState(() => isMirrored = !isMirrored);
+                        HapticFeedback.selectionClick();
+                        if (autoSendToBoard) _sendToBoard();
+                      }
+                    : null,
+
                 onWhatsOn: _loadWhatsOn,
                 onComments: _openComments,
               ),

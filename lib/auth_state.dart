@@ -9,7 +9,8 @@ class AuthState extends ChangeNotifier {
   String? _username;
   String? _email;
   String? _displayName;
-
+  bool _guestMode = false;
+  bool get isGuest => _guestMode;
   bool get isLoggedIn => _loggedIn;
   String? get username => _username;
   String? get email => _email;
@@ -126,6 +127,14 @@ class AuthState extends ChangeNotifier {
   /// -------------------------
   Future<void> tryAutoLogin() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // 👇 Check if guest mode was active
+    if (prefs.getBool("guestMode") ?? false) {
+      _guestMode = true;
+      notifyListeners();
+      return;
+    }
+
     if (prefs.getBool("loggedIn") ?? false) {
       _loggedIn = true;
       _username = prefs.getString("username");
@@ -140,6 +149,7 @@ class AuthState extends ChangeNotifier {
   /// -------------------------
   Future<void> logout() async {
     _loggedIn = false;
+    _guestMode = false;
     _username = null;
     _email = null;
     _displayName = null;
@@ -150,5 +160,24 @@ class AuthState extends ChangeNotifier {
     await prefs.remove("username");
     await prefs.remove("email");
     await prefs.remove("displayName");
+    await prefs.remove("guestMode");
+  }
+
+  /// -------------------------
+  /// GUEST MODE
+  /// -------------------------
+  Future<void> setGuestMode(bool enabled) async {
+    _guestMode = enabled;
+    _loggedIn = false; // make sure we treat it separately
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("guestMode", enabled);
+  }
+
+  Future<void> tryAutoGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    _guestMode = prefs.getBool("guestMode") ?? false;
+    if (_guestMode) notifyListeners();
   }
 }

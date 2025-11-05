@@ -727,66 +727,83 @@ class _WallLogPageState extends State<WallLogPage> {
                           ),
                           const SizedBox(height: 16),
 
-                          _menuButton(
-                            label: "Create Problem",
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      CreateProblemPage(wallId: selectedWall!),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
-                          if (_hasWallDrafts) ...[
+                          // Only for logged-in users
+                          if (!auth.isGuest) ...[
+                            // ✅ Create Problem
                             _menuButton(
-                              label: "Draft Problems",
-                              onPressed: () async {
-                                final dir =
-                                    await getApplicationDocumentsDirectory();
-                                final draftFile = File(
-                                  "${dir.path}/${selectedWall!}_drafts.csv",
-                                );
-                                if (!await draftFile.exists() ||
-                                    (await draftFile.readAsLines()).isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("No draft problems found."),
-                                    ),
-                                  );
-                                  return;
-                                }
+                              label: "Create Problem",
+                              onPressed: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => LoadProblemsPage(
+                                    builder: (_) => CreateProblemPage(
                                       wallId: selectedWall!,
-                                      isDraftMode: true,
                                     ),
                                   ),
                                 );
                               },
                             ),
                             const SizedBox(height: 16),
+                            if (_hasWallDrafts) ...[
+                              _menuButton(
+                                label: "Draft Problems",
+                                onPressed: () async {
+                                  final dir =
+                                      await getApplicationDocumentsDirectory();
+                                  final draftFile = File(
+                                    "${dir.path}/${selectedWall!}_drafts.csv",
+                                  );
+                                  if (!await draftFile.exists() ||
+                                      (await draftFile.readAsLines()).isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          "No draft problems found.",
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => LoadProblemsPage(
+                                        wallId: selectedWall!,
+                                        isDraftMode: true,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            _menuButton(
+                              label: "Log Book",
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        LogBookPage(wallId: selectedWall!),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                          ] else ...[
+                            // Optional hint for guest users
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                "Logbook, Drafts, and Create features require login.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ),
                           ],
 
-                          _menuButton(
-                            label: "Log Book",
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      LogBookPage(wallId: selectedWall!),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
+                          // Always visible
                           _menuButton(
                             label: "Settings",
                             onPressed: () {

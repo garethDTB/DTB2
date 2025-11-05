@@ -93,12 +93,15 @@ class _ClimbLightAppState extends State<ClimbLightApp>
       initialLocation: '/login',
       redirect: (context, state) {
         final loggedIn = auth.isLoggedIn;
+        final guest = auth.isGuest;
         final loggingIn = state.matchedLocation == '/login';
 
-        if (!loggedIn) return loggingIn ? null : '/login';
-        if (loggedIn && loggingIn) return '/wall-log';
+        // Allow guests and logged-in users
+        if (!loggedIn && !guest) return loggingIn ? null : '/login';
+        if ((loggedIn || guest) && loggingIn) return '/wall-log';
         return null;
       },
+
       routes: [
         GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
         GoRoute(path: '/wall-log', builder: (_, __) => const WallLogPage()),

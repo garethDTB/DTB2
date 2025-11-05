@@ -48,7 +48,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         final provider = context.read<ProblemsProvider>();
         final api = context.read<ApiService>();
         final auth = context.read<AuthState>();
-        await provider.load(widget.wallId, api, auth.username!);
+        await provider.load(widget.wallId, api, auth.username ?? "guest");
       });
     }
   }

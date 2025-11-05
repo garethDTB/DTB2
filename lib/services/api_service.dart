@@ -293,6 +293,25 @@ class ApiService {
   }
 
   /// ------------------------------
+  /// ACCOUNT DELETION
+  /// ------------------------------
+  Future<bool> deleteAccount(String username, String password) async {
+    try {
+      final url = Uri.parse('$baseUrl/users/delete');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"username": username, "password": password}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("❌ Account deletion error: $e");
+      return false;
+    }
+  }
+
+  /// ------------------------------
   /// PROBLEMS
   /// ------------------------------
   Future<List<Map<String, dynamic>>> getWallProblems(String wallId) async {

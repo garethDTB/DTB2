@@ -1,5 +1,7 @@
 // lib/features/problem_detail/presentation/widgets/action_buttons_row.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../../auth_state.dart'; // adjust path if needed
 
 class ActionButtonsRow extends StatefulWidget {
   final bool likedByUser;
@@ -10,7 +12,7 @@ class ActionButtonsRow extends StatefulWidget {
   final VoidCallback onFlash;
   final VoidCallback onSendToBoard;
   final bool isMirrored;
-  final VoidCallback onMirrorToggle;
+  final VoidCallback? onMirrorToggle;
   final VoidCallback? onWhatsOn;
   final VoidCallback? onComments;
 
@@ -24,7 +26,7 @@ class ActionButtonsRow extends StatefulWidget {
     required this.onFlash,
     required this.onSendToBoard,
     required this.isMirrored,
-    required this.onMirrorToggle,
+    this.onMirrorToggle,
     this.onWhatsOn,
     this.onComments,
   });
@@ -61,11 +63,14 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthState>();
+    final isGuest = auth.isGuest;
+
     return SizedBox(
       height: 100,
       child: Row(
         children: [
-          // Left arrow indicator
+          // Left scroll indicator
           if (_canScrollLeft)
             const Icon(Icons.chevron_left, size: 28, color: Colors.grey),
 
@@ -83,14 +88,16 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
                       size: widget.likedByUser ? 30 : 26,
                     ),
                     label: "${widget.likesCount}",
-                    onPressed: widget.onToggleLike,
+                    onPressed: isGuest ? null : widget.onToggleLike,
+                    disabled: isGuest,
                   ),
 
                   // ❌ Attempt
                   _buildButton(
                     icon: const Icon(Icons.close, color: Colors.red, size: 28),
                     label: "Attempt",
-                    onPressed: widget.onAttempt,
+                    onPressed: isGuest ? null : widget.onAttempt,
+                    disabled: isGuest,
                   ),
 
                   // ✅ Tick
@@ -101,7 +108,8 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
                       size: 28,
                     ),
                     label: "Tick",
-                    onPressed: widget.onTick,
+                    onPressed: isGuest ? null : widget.onTick,
+                    disabled: isGuest,
                   ),
 
                   // ⚡ Flash
@@ -112,10 +120,11 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
                       size: 28,
                     ),
                     label: "Flash",
-                    onPressed: widget.onFlash,
+                    onPressed: isGuest ? null : widget.onFlash,
+                    disabled: isGuest,
                   ),
 
-                  // 💡 Send (bulb)
+                  // 💡 Send to Board (allowed for everyone)
                   _buildButton(
                     icon: const Icon(
                       Icons.lightbulb,
@@ -127,15 +136,16 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
                   ),
 
                   // 🔄 Mirror toggle
-                  _buildButton(
-                    icon: Icon(
-                      Icons.flip,
-                      color: widget.isMirrored ? Colors.teal : Colors.grey,
-                      size: 28,
+                  if (widget.onMirrorToggle != null)
+                    _buildButton(
+                      icon: Icon(
+                        Icons.flip,
+                        color: widget.isMirrored ? Colors.teal : Colors.grey,
+                        size: 28,
+                      ),
+                      label: "Mirror",
+                      onPressed: widget.onMirrorToggle!,
                     ),
-                    label: "Mirror",
-                    onPressed: widget.onMirrorToggle,
-                  ),
 
                   // 📺 What's On
                   if (widget.onWhatsOn != null)
@@ -165,7 +175,7 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
             ),
           ),
 
-          // Right arrow indicator
+          // Right scroll indicator
           if (_canScrollRight)
             const Icon(Icons.chevron_right, size: 28, color: Colors.grey),
         ],
@@ -173,19 +183,27 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
     );
   }
 
+  /// Generic reusable button builder with disabled visual state
   Widget _buildButton({
     required Icon icon,
     required String label,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
+    bool disabled = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(icon: icon, onPressed: onPressed),
-          Text(label, textAlign: TextAlign.center),
-        ],
+      child: Opacity(
+        opacity: disabled ? 0.4 : 1.0,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Tooltip(
+              message: disabled ? "Login required" : "",
+              child: IconButton(icon: icon, onPressed: onPressed),
+            ),
+            Text(label, textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }

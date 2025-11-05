@@ -481,6 +481,21 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ],
                 ),
+
+                const SizedBox(height: 24),
+
+                // 👇 New Guest Access Button
+                TextButton.icon(
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text("Continue as Guest"),
+                  onPressed: () async {
+                    await auth.setGuestMode(true);
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WallLogPage()),
+                    );
+                  },
+                ),
               ],
             ),
           ),

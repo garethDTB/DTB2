@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dtb2/services/api_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -41,6 +42,90 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('gradeMode', mode);
     setState(() => _gradeMode = mode);
+  }
+
+  Future<void> _confirmDeleteAccount(BuildContext context) async {
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Account"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Please confirm your username and password to permanently delete your account. "
+              "This action cannot be undone.",
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(labelText: "Username"),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: passwordController,
+              decoration: const InputDecoration(labelText: "Password"),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final username = usernameController.text.trim();
+      final password = passwordController.text.trim();
+
+      if (username.isEmpty || password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please enter both fields.")),
+        );
+        return;
+      }
+
+      try {
+        final api = ApiService(
+          "https://YOUR_AZURE_FUNCTION_URL",
+        ); // <-- update this
+        final success = await api.deleteAccount(username, password);
+
+        if (success) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.clear();
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Account deleted successfully.")),
+            );
+            Navigator.of(context).pop(); // exit settings
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Deletion failed. Check credentials."),
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
   }
 
   Future<void> _saveAutoSend(bool value) async {
@@ -199,7 +284,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       "Use **Create Problem** to design new climbs directly on your board image.\n\n"
                       "• Tap holds to select them — tap again to turn them **off**.\n"
                       "• Once you’ve chosen your holds, press **Save** to start the confirmation process:\n"
-                      "Confirm your **Start** holds (green), **Finish** hold (red), and **Feet** holds (yellow) if your board supports them.\n"
+                      "Confirm your **Start** holds (green), **Finish** hold (red), and **Feet** holds (yellow) if your board supports tracked feet.\n"
                       "• After confirming, you can review your selection and save or edit it.\n"
                       "• You can add a name, comment, grade, and star rating.\n"
                       "• Problems can be **saved as drafts** or uploaded immediately.\n"
@@ -276,6 +361,30 @@ class _SettingsPageState extends State<SettingsPage> {
               style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
             ),
           ),
+          const SizedBox(height: 24),
+          Card(
+            color: Colors.red.shade50,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.delete_forever, color: Colors.red),
+              title: const Text(
+                "Delete Account",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: const Text(
+                "Permanently remove your account and all associated data.",
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () => _confirmDeleteAccount(context),
+            ),
+          ),
+
+          const SizedBox(height: 24),
         ],
       ),
     );
