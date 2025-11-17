@@ -141,13 +141,14 @@ class _ClimbLightAppState extends State<ClimbLightApp>
 
     return MaterialApp.router(
       title: 'ClimbLight',
+      debugShowCheckedModeBanner: false, // 👈 hides the "DEBUG" banner
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
       routerConfig: router,
 
-      // 👇 Add this builder to clamp text scaling globally
+      // 👇 Clamp text scaling globally
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
         final clampedTextScale = mediaQuery.textScaleFactor.clamp(1.0, 1.3);
@@ -157,6 +158,7 @@ class _ClimbLightAppState extends State<ClimbLightApp>
         );
       },
     );
+
     ;
   }
 }
