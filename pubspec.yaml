@@ -48,6 +48,9 @@ dependencies:
   dropdown_button2: ^2.3.9
   dropbox_client: ^1.2.0
   web_socket_channel: ^2.4.0
+  marquee: ^2.2.3
+
+
   
 
 dev_dependencies:

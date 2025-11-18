@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:marquee/marquee.dart';
 import '../../../hold_utils.dart';
 import '../../../auth_state.dart';
 import '../../../services/api_service.dart';
@@ -25,6 +25,10 @@ import 'widgets/swipe_hint_arrow.dart';
 import 'widgets/legend_bar.dart';
 
 bool _mirrorAvailable = false;
+bool _tickerVisible = true;
+bool _tickerPaused = false;
+
+Timer? _tickerTimer;
 
 class ProblemDetailPage extends StatefulWidget {
   final String wallId;
@@ -82,6 +86,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   @override
   void initState() {
     super.initState();
+
     currentIndex = widget.initialIndex;
     _cols = widget.numCols;
     _rows = widget.numRows;
@@ -110,6 +115,23 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   void dispose() {
     _wsSub?.cancel();
     super.dispose();
+  }
+
+  String _buildTickerText() {
+    final parts = <String>[];
+
+    final setter = (widget.problems[currentIndex]['setter'] ?? "").toString();
+    final comment = (widget.problems[currentIndex]['comment'] ?? "").toString();
+
+    if (setter.isNotEmpty) {
+      parts.add("Setter: $setter");
+    }
+
+    if (comment.isNotEmpty) {
+      parts.add("Comment: $comment");
+    }
+
+    return parts.isEmpty ? "" : parts.join("   •   ");
   }
 
   Future<void> _loadMirrorDic() async {
@@ -654,15 +676,41 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(titleText),
+
               if (footSubtitle != null)
                 Text(
-                  footSubtitle,
+                  footSubtitle!,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
                 ),
+
+              // NEW — Interactive Ticker (fade + auto-hide + pause on tap)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _tickerPaused = !_tickerPaused;
+                  });
+                },
+                child: SizedBox(
+                  height: 18,
+                  width: double.infinity,
+                  child: Marquee(
+                    text: _buildTickerText(),
+                    style: const TextStyle(color: Colors.black87, fontSize: 11),
+                    blankSpace: 40.0,
+                    velocity: 22.0,
+                    pauseAfterRound: _tickerPaused
+                        ? const Duration(days: 365) // effectively paused
+                        : const Duration(seconds: 1),
+                    startAfter: Duration.zero,
+                    startPadding: 0.0,
+                  ),
+                ),
+              ),
             ],
           ),
+
           actions: [
             if (canEdit)
               IconButton(
