@@ -15,7 +15,10 @@ import 'services/api_service.dart';
 import 'services/websocket_service.dart';
 import 'providers/problems_provider.dart';
 import 'features/comments/presentation/comments_page.dart';
-import 'create_problem_page.dart'; // 👈 Make sure this import exists!
+import 'create_problem_page.dart';
+
+// 👇 Global RouteObserver
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 Future<void> clearAllWallData() async {
   final dir = await getApplicationDocumentsDirectory();
@@ -23,18 +26,13 @@ Future<void> clearAllWallData() async {
   if (await wallsDir.exists()) {
     await wallsDir.delete(recursive: true);
     debugPrint("🧹 Cleared all wall data in ${wallsDir.path}");
-  } else {
-    debugPrint("ℹ️ No wall data found at ${wallsDir.path}");
   }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🧹 Only clear wall data in debug mode
-  if (kDebugMode) {
-    await clearAllWallData();
-  }
+  if (kDebugMode) await clearAllWallData();
 
   runApp(
     MultiProvider(
@@ -77,10 +75,8 @@ class _ClimbLightAppState extends State<ClimbLightApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      debugPrint("📱 App resumed → reconnecting WebSocket...");
       ProblemUpdaterService.instance.connect();
     } else if (state == AppLifecycleState.paused) {
-      debugPrint("📱 App paused → disconnecting WebSocket...");
       ProblemUpdaterService.instance.disconnect();
     }
   }
@@ -91,23 +87,23 @@ class _ClimbLightAppState extends State<ClimbLightApp>
 
     final router = GoRouter(
       initialLocation: '/login',
+      observers: [
+        routeObserver, // 👈 THIS WORKS in go_router 14.x
+      ],
       redirect: (context, state) {
         final loggedIn = auth.isLoggedIn;
         final guest = auth.isGuest;
         final loggingIn = state.matchedLocation == '/login';
 
-        // Allow guests and logged-in users
         if (!loggedIn && !guest) return loggingIn ? null : '/login';
         if ((loggedIn || guest) && loggingIn) return '/wall-log';
         return null;
       },
-
       routes: [
         GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
         GoRoute(path: '/wall-log', builder: (_, __) => const WallLogPage()),
         GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
 
-        // 👇 Comments route
         GoRoute(
           path: '/comments',
           builder: (context, state) {
@@ -120,7 +116,6 @@ class _ClimbLightAppState extends State<ClimbLightApp>
           },
         ),
 
-        // 👇 Create / Edit Problem route
         GoRoute(
           path: '/create',
           builder: (context, state) {
@@ -131,8 +126,7 @@ class _ClimbLightAppState extends State<ClimbLightApp>
               isDraftMode: extra?['isDraftMode'] ?? false,
               isEditing: extra?['isEditing'] ?? false,
               problemRow: (extra?['problemRow'] as List?)?.cast<String>(),
-              draftRow: (extra?['draftRow'] as List?)
-                  ?.cast<String>(), // optional, if you also support drafts
+              draftRow: (extra?['draftRow'] as List?)?.cast<String>(),
             );
           },
         ),
@@ -141,24 +135,25 @@ class _ClimbLightAppState extends State<ClimbLightApp>
 
     return MaterialApp.router(
       title: 'ClimbLight',
-      debugShowCheckedModeBanner: false, // 👈 hides the "DEBUG" banner
+      debugShowCheckedModeBanner: false,
+
+      // 👇 DO NOT add onGenerateRoute or routes here!
+      routerConfig: router,
+
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      routerConfig: router,
 
-      // 👇 Clamp text scaling globally
       builder: (context, child) {
-        final mediaQuery = MediaQuery.of(context);
-        final clampedTextScale = mediaQuery.textScaleFactor.clamp(1.0, 1.3);
+        final mq = MediaQuery.of(context);
         return MediaQuery(
-          data: mediaQuery.copyWith(textScaleFactor: clampedTextScale),
+          data: mq.copyWith(
+            textScaleFactor: mq.textScaleFactor.clamp(1.0, 1.3),
+          ),
           child: child!,
         );
       },
     );
-
-    ;
   }
 }

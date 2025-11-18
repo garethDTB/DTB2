@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
+import '../main.dart'; // gives access to routeObserver
 
 import 'auth_state.dart';
 import 'login_page.dart';
@@ -32,7 +33,8 @@ class WallLogPage extends StatefulWidget {
   State<WallLogPage> createState() => _WallLogPageState();
 }
 
-class _WallLogPageState extends State<WallLogPage> {
+class _WallLogPageState extends State<WallLogPage>
+    with RouteAware, WidgetsBindingObserver {
   List<Map<String, String>> walls = [];
   String? selectedWall;
   String? lastWall;
@@ -171,24 +173,125 @@ class _WallLogPageState extends State<WallLogPage> {
     return File('${wallDir.path}/$filename');
   }
 
-  /// ✅ Check if draft file exists and has problems
   Future<bool> _hasDrafts(String wallId) async {
     final dir = await getApplicationDocumentsDirectory();
-    final draftFile = File(
-      "${dir.path}/${wallId}_drafts.csv",
-    ); // match CreateProblemPage
-    if (!await draftFile.exists()) {
-      debugPrint("📝 Draft file not found for $wallId");
-      return false;
-    }
+    final draftFile = File("${dir.path}/${wallId}_drafts.csv");
+
+    if (!await draftFile.exists()) return false;
+
     final lines = await draftFile.readAsLines();
-    debugPrint("📝 Draft file found: ${lines.length} lines");
-    return lines.isNotEmpty;
+
+    // Remove empty lines
+    final usable = lines.where((l) => l.trim().isNotEmpty).toList();
+
+    // 🟦 NEW RULE:
+    // If there's at least 1 usable line, we have a draft.
+    return usable.isNotEmpty;
+  }
+
+  List<DropdownMenuItem<String>> _buildWallDropdownItems() {
+    List<DropdownMenuItem<String>> items = [];
+
+    for (int i = 0; i < walls.length; i++) {
+      final w = walls[i];
+      final appName = w['appName'] ?? '';
+      final userName = w['userName'] ?? '';
+      final isNearest = (i == 0); // nearest wall moved to index 0
+      final distMeters = double.tryParse(w['computedDistance'] ?? '') ?? -1;
+
+      final distKm = distMeters > 0
+          ? (distMeters / 1000).toStringAsFixed(1) + " km"
+          : "";
+
+      // --------------------------------------------------------------
+      // 1️⃣ SECTION HEADER AT TOP ("Nearest Wall")
+      // --------------------------------------------------------------
+      if (i == 0) {
+        items.add(
+          const DropdownMenuItem<String>(
+            enabled: false,
+            value: null,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: 6),
+              child: Text(
+                "Nearest Wall",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      // --------------------------------------------------------------
+      // 2️⃣ DIVIDER AFTER THE NEAREST WALL
+      // --------------------------------------------------------------
+      if (i == 1) {
+        items.add(
+          const DropdownMenuItem<String>(
+            enabled: false,
+            value: null,
+            child: Divider(thickness: 1, height: 1),
+          ),
+        );
+      }
+
+      // --------------------------------------------------------------
+      // 3️⃣ ACTUAL WALL ENTRY
+      // --------------------------------------------------------------
+      items.add(
+        DropdownMenuItem<String>(
+          value: appName,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                userName,
+                style: TextStyle(
+                  fontWeight: isNearest ? FontWeight.bold : FontWeight.normal,
+                  color: isNearest ? Colors.blue : null,
+                ),
+              ),
+              Text(
+                distKm,
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
+  }
+
+  @override
+  void didPopNext() async {
+    // Called when returning to this page from CreateProblemPage
+    if (selectedWall != null) {
+      final hasDrafts = await _hasDrafts(selectedWall!);
+
+      if (mounted) {
+        setState(() {
+          _hasWallDrafts = hasDrafts;
+        });
+      }
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     dropboxFileService = DropboxFileService(dropboxAuth);
 
     () async {
@@ -213,13 +316,37 @@ class _WallLogPageState extends State<WallLogPage> {
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && selectedWall != null) {
+      _refreshDraftsStatus();
+    }
+  }
+
+  Future<void> _refreshDraftsStatus() async {
+    if (selectedWall == null) return;
+    final hasDrafts = await _hasDrafts(selectedWall!);
+
+    if (mounted) {
+      setState(() {
+        _hasWallDrafts = hasDrafts;
+      });
+    }
   }
 
   /// ✅ Load walllist.csv from Dropbox (fallback to cache/assets)
   Future<void> _loadWalls() async {
     String raw = "";
+
+    // ----------------------------------------------------------------------------
+    // 1. LOAD THE RAW CSV (Dropbox → cache → asset)
+    // ----------------------------------------------------------------------------
     try {
       final file = await dropboxFileService.downloadAndCacheFile(
         "global",
@@ -249,6 +376,9 @@ class _WallLogPageState extends State<WallLogPage> {
     final lines = const LineSplitter().convert(raw);
     if (lines.isEmpty) return;
 
+    // ----------------------------------------------------------------------------
+    // 2. PARSE CSV INTO MAPS
+    // ----------------------------------------------------------------------------
     final data = lines.map((line) {
       final values = line.split(',');
       return {
@@ -257,18 +387,79 @@ class _WallLogPageState extends State<WallLogPage> {
           if (values.length > 2) values[2].trim(),
           if (values.length > 3) values[3].trim(),
         ].join(" ").trim(),
-        'angle': values.length > 3 ? values[3].trim() : "",
         'lat': values.length > 4 ? values[4].trim() : "",
         'lon': values.length > 5 ? values[5].trim() : "",
-        'distance': values.length > 7 ? values[7].trim() : "",
-        'active': values.length > 8 ? values[8].trim() : "",
       };
     }).toList();
 
+    // ----------------------------------------------------------------------------
+    // 3. COMPUTE DISTANCE FOR EVERY WALL  (STEP 1)
+    // ----------------------------------------------------------------------------
+    if (_userPosition != null) {
+      for (final w in data) {
+        final lat = double.tryParse(w['lat'] ?? '');
+        final lon = double.tryParse(w['lon'] ?? '');
+
+        if (lat != null && lon != null) {
+          final dist = Geolocator.distanceBetween(
+            _userPosition!.latitude,
+            _userPosition!.longitude,
+            lat,
+            lon,
+          );
+          w['computedDistance'] = dist.toString();
+        } else {
+          w['computedDistance'] = '9999999';
+        }
+      }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 4. FIND THE NEAREST WALL
+    // ----------------------------------------------------------------------------
+    if (_userPosition != null) {
+      double minDistance = double.infinity;
+      String? nearestWall;
+
+      for (final w in data) {
+        final dist = double.tryParse(w['computedDistance'] ?? '9999999')!;
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestWall = w['appName'];
+        }
+      }
+
+      _highlightWall = nearestWall; // <-- highlight only, do NOT auto-select
+    }
+
+    // ----------------------------------------------------------------------------
+    // 5. SORT WALLS ALPHABETICALLY (EXCEPT THE NEAREST ONE)
+    // ----------------------------------------------------------------------------
+    data.sort((a, b) => (a['userName'] ?? '').compareTo(b['userName'] ?? ''));
+
+    // ----------------------------------------------------------------------------
+    // 6. MOVE NEAREST WALL TO TOP
+    // ----------------------------------------------------------------------------
+    if (_highlightWall != null) {
+      final nearest = data.firstWhere(
+        (w) => w['appName'] == _highlightWall,
+        orElse: () => {},
+      );
+
+      data.removeWhere((w) => w['appName'] == _highlightWall);
+      data.insert(0, nearest);
+    }
+
+    // ----------------------------------------------------------------------------
+    // 7. SET STATE → update dropdown list
+    // ----------------------------------------------------------------------------
     setState(() {
       walls = data;
     });
 
+    // ----------------------------------------------------------------------------
+    // 8. CACHE
+    // ----------------------------------------------------------------------------
     try {
       await _prefs?.setStringList(
         'walls_cache',
@@ -276,39 +467,6 @@ class _WallLogPageState extends State<WallLogPage> {
       );
     } catch (e) {
       debugPrint("⚠️ Failed to cache walls: $e");
-    }
-
-    // ✅ First-time user logic
-    if (walls.isNotEmpty && selectedWall == null && lastWall == null) {
-      if (_userPosition != null) {
-        // Find nearest wall
-        double minDistance = double.infinity;
-        String? nearestWall;
-        for (final w in walls) {
-          final lat = double.tryParse(w['lat'] ?? '');
-          final lon = double.tryParse(w['lon'] ?? '');
-          if (lat != null && lon != null) {
-            final dist = Geolocator.distanceBetween(
-              _userPosition!.latitude,
-              _userPosition!.longitude,
-              lat,
-              lon,
-            );
-            if (dist < minDistance) {
-              minDistance = dist;
-              nearestWall = w['appName'];
-            }
-          }
-        }
-        if (nearestWall != null) {
-          // Highlight nearest (don’t auto-select)
-          setState(() => _highlightWall = nearestWall);
-        }
-      } else {
-        debugPrint(
-          "📍 Location not available, waiting for user to select a wall",
-        );
-      }
     }
   }
 
@@ -469,13 +627,11 @@ class _WallLogPageState extends State<WallLogPage> {
     // Step 4: Draft check
     final hasDrafts = await _hasDrafts(wall);
     debugPrint("📂 Drafts check for $wall => $hasDrafts");
-    if (mounted) {
-      setState(() {
-        _hasWallDrafts = hasDrafts;
-      });
-    }
+
     if (!mounted) return;
+
     setState(() {
+      _hasWallDrafts = hasDrafts;
       _isLoadingWall = false;
     });
 
@@ -600,7 +756,6 @@ class _WallLogPageState extends State<WallLogPage> {
                   const Center(child: CircularProgressIndicator())
                 else
                   Container(
-                    // 👇 ensure dropdown has room to render
                     constraints: const BoxConstraints(
                       minHeight: 56,
                       maxHeight: 70,
@@ -609,43 +764,10 @@ class _WallLogPageState extends State<WallLogPage> {
                       child: DropdownButton2<String>(
                         isExpanded: true,
                         hint: const Text('Select a wall'),
-                        dropdownStyleData: const DropdownStyleData(
-                          useSafeArea:
-                              true, // 👈 ensures safe popup area on iOS
-                          elevation: 8,
-                        ),
-                        menuItemStyleData: const MenuItemStyleData(height: 48),
-                        buttonStyleData: const ButtonStyleData(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.all(Radius.circular(8)),
-                            border: Border.fromBorderSide(
-                              BorderSide(color: Colors.grey),
-                            ),
-                          ),
-                        ),
-                        items: walls.map((w) {
-                          final appName = (w['appName'] ?? '').trim();
-                          final userName = (w['userName'] ?? 'Unnamed').trim();
-                          final isHighlight = appName == _highlightWall;
-                          return DropdownMenuItem<String>(
-                            value: appName,
-                            child: Text(
-                              userName,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: isHighlight
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: isHighlight ? Colors.blue : null,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) _enterWall(value.trim());
-                        },
+
+                        // ----------------------------------------------------------------------
+                        // 🔍 Search logic (unchanged)
+                        // ----------------------------------------------------------------------
                         dropdownSearchData: DropdownSearchData(
                           searchController: _searchController,
                           searchInnerWidgetHeight: 60,
@@ -664,14 +786,42 @@ class _WallLogPageState extends State<WallLogPage> {
                               (w) => w['appName'] == item.value,
                               orElse: () => {},
                             );
-                            return (wall['appName'] ?? "")
+                            return (wall['userName'] ?? "")
                                     .toLowerCase()
                                     .contains(searchValue.toLowerCase()) ||
-                                (wall['userName'] ?? "").toLowerCase().contains(
+                                (wall['appName'] ?? "").toLowerCase().contains(
                                   searchValue.toLowerCase(),
                                 );
                           },
                         ),
+
+                        // ----------------------------------------------------------------------
+                        // 🎨 Dropdown styling (unchanged)
+                        // ----------------------------------------------------------------------
+                        dropdownStyleData: const DropdownStyleData(
+                          useSafeArea: true,
+                          elevation: 8,
+                        ),
+                        menuItemStyleData: const MenuItemStyleData(height: 48),
+                        buttonStyleData: const ButtonStyleData(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.all(Radius.circular(8)),
+                            border: Border.fromBorderSide(
+                              BorderSide(color: Colors.grey),
+                            ),
+                          ),
+                        ),
+
+                        // ----------------------------------------------------------------------
+                        // 📌 WALL LIST ITEMS (THIS IS THE PART YOU WANTED!)
+                        // ----------------------------------------------------------------------
+                        items: _buildWallDropdownItems(),
+
+                        onChanged: (value) {
+                          if (value != null) _enterWall(value.trim());
+                        },
                       ),
                     ),
                   ),

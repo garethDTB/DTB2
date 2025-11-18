@@ -131,7 +131,7 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
                       color: Colors.blue,
                       size: 28,
                     ),
-                    label: "Send",
+                    label: "Cast",
                     onPressed: widget.onSendToBoard,
                   ),
 

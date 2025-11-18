@@ -200,7 +200,7 @@ class _SettingsPageState extends State<SettingsPage> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: SwitchListTile(
-              title: const Text("Auto Send to Board"),
+              title: const Text("Auto Cast to Board"),
               subtitle: const Text("Automatically send problem when swiping"),
               value: _autoSend,
               onChanged: (v) => _saveAutoSend(v),
@@ -290,7 +290,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       "• You can add a name, comment, grade, and star rating.\n"
                       "• Problems can be **saved as drafts** or uploaded immediately.\n"
                       "• A maximum of **10 drafts** can be stored at once.\n\n"
-                      "When you tap **Send to Wall**, the holds light up on the board:\n"
+                      "When you tap **Cast to Wall**, the holds light up on the board:\n"
                       "🟢 Start • 🔴 Finish • 🔵 Intermediate • 🟡 Feet (if enabled).",
                 ),
 
@@ -317,7 +317,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       "• ❌ **Attempt** — Log that you’ve tried the problem but haven’t sent it yet.\n"
                       "• ✅ **Tick** — Mark the problem as completed in this session.\n"
                       "• ⚡ **Flash** — Record that you sent it on your first attempt.\n"
-                      "• 💡 **Send to Board** — Push the problem to your connected training board.\n"
+                      "• 💡 **Cast to Board** — Push the problem to your connected training board.\n"
                       "• 🔄 **Mirror** — Toggle a mirrored version of the problem on the opposite side.\n"
                       "• 📺 **What’s On** — See what’s currently loaded on the board.\n"
                       "• 💬 **Comments** — View or add feedback from other climbers.\n\n"
@@ -340,14 +340,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 // 6. Sending to the Wall
                 _buildExpandableSection(
                   index: 6,
-                  title: "Sending to the Wall",
+                  title: "Casting to the Wall",
                   content:
-                      "When you tap **Send to Board**, the problem will appear on the wall if your device is connected through the internet.\n\n"
+                      "When you tap **Cast to Board**, the problem will appear on the wall if your device is connected through the internet.\n\n"
                       "• 🟢 **Green holds** — Starting positions\n"
                       "• 🔴 **Red holds** — Finishing positions\n"
                       "• 🔵 **Blue holds** — Intermediate or optional holds\n"
                       "• 🟡 **Yellow holds** — Tracked holds (only on boards that support hold tracking)\n\n"
-                      "💡 Make sure your phone or tablet is connected before sending.\n"
+                      "💡 Make sure your phone or tablet is connected to the internet before casting.\n"
                       "If you see a 🚫 **phone symbol** on the wall tablet, it means the system is restricted — tap it to remove the restriction and allow mobile devices to connect.",
                 ),
               ],
