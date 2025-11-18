@@ -35,7 +35,10 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
     });
   }
 
-  Future<void> _deleteProblem(SentProblem problem) async {
+  // --------------------------
+  // DELETE by INDEX (not name)
+  // --------------------------
+  Future<void> _deleteProblem(int index) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -63,10 +66,11 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
       final api = context.read<ApiService>();
       final auth = context.read<AuthState>();
 
+      // IMPORTANT: send index instead of problem name
       final updatedJson = await api.deleteSentProblem(
         _session.wall,
         _session.id,
-        problem.problem, // raw DB name
+        index, // ⭐ delete specific item
         auth.username ?? "guest",
       );
 
@@ -112,14 +116,15 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          "${_session.wall} — ${DateFormat.yMMMd().format(_session.date)}",
+          "${_session.wall} — "
+          "${DateFormat.yMMMd().format(_session.date)}",
         ),
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
-            // ✅ Summary card at top
+            // Summary Card
             Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
@@ -132,7 +137,7 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
               ),
             ),
 
-            // ✅ Attempts
+            // Attempts Section
             if (attempts.isNotEmpty)
               ExpansionTile(
                 title: const Text(
@@ -147,7 +152,7 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
                 }).toList(),
               ),
 
-            // ✅ Sent Problems
+            // Sent Problems Section
             ExpansionTile(
               initiallyExpanded: true,
               title: const Text(
@@ -155,7 +160,9 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               children: sent.isNotEmpty
-                  ? sent.map((s) {
+                  ? List.generate(sent.length, (index) {
+                      final s = sent[index];
+
                       return ListTile(
                         title: Text(_displayProblemName(s)),
                         trailing: Wrap(
@@ -171,12 +178,12 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteProblem(s),
+                              onPressed: () => _deleteProblem(index),
                             ),
                           ],
                         ),
                       );
-                    }).toList()
+                    })
                   : [
                       const ListTile(
                         title: Text("No problems sent in this session."),

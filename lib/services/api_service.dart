@@ -219,17 +219,18 @@ class ApiService {
   Future<Map<String, dynamic>> deleteSentProblem(
     String wallId,
     String sessionId,
-    String problemName,
+    int index,
     String user,
   ) async {
     final url = Uri.parse(
-      '$baseUrl/walls/$wallId/sessions/$sessionId/sent/$problemName?user=$user',
+      '$baseUrl/walls/$wallId/sessions/$sessionId/sent/$index?user=$user',
     );
 
     final resp = await http.delete(url);
+
     if (resp.statusCode != 200) {
       throw Exception(
-        "Failed to delete sent problem [$problemName] from session $sessionId "
+        "Failed to delete sent problem at index [$index] from session $sessionId "
         "status [${resp.statusCode}] ${resp.body}",
       );
     }

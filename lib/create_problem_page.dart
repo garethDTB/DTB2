@@ -816,17 +816,24 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                                 return ws == null ? finish : "hold$ws";
                               })(),
                       );
-
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text("✏️ Problem Updated Successfully"),
-                            backgroundColor: Colors.orange,
-                            duration: Duration(seconds: 2),
+                            content: Text(
+                              "📝 Draft saved! Drafts can be viewed from the Wall loading screen.",
+                            ),
+                            backgroundColor: Colors.blueAccent,
                           ),
                         );
                       }
-                      return; // stop after edit
+
+                      // ✅ Return to the Wall Log Page after a tiny delay
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (!mounted) return;
+                        Navigator.of(context).pop(); // ← Pop CreateProblemPage
+                      });
+
+                      return;
                     }
 
                     // ---------------- CREATE BRANCH (NEW PROBLEM) ----------------
