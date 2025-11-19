@@ -9,19 +9,29 @@ class AuthState extends ChangeNotifier {
   String? _username;
   String? _email;
   String? _displayName;
+
   bool _guestMode = false;
+
+  // 👇 NEW superuser flag
+  bool _isSuperuser = false;
+
+  // GETTERS
   bool get isGuest => _guestMode;
   bool get isLoggedIn => _loggedIn;
   String? get username => _username;
   String? get email => _email;
   String? get displayName => _displayName;
 
-  /// -------------------------
+  // 👇 NEW getter
+  bool get isSuperuser => _isSuperuser;
+
+  /// ---------------------------------------------------
   /// LOGIN
-  /// -------------------------
+  /// ---------------------------------------------------
   Future<bool> login(ApiService api, String username, String password) async {
     try {
       final url = Uri.parse("${api.baseUrl}/users/login");
+
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
@@ -30,10 +40,15 @@ class AuthState extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
         _loggedIn = true;
         _username = data["username"];
         _email = data["email"];
         _displayName = data["display_name"];
+
+        // 👇 SUPERUSER flag from backend (bool)
+        _isSuperuser = data["is_superuser"] == true;
+
         notifyListeners();
 
         final prefs = await SharedPreferences.getInstance();
@@ -41,17 +56,22 @@ class AuthState extends ChangeNotifier {
         await prefs.setString("username", _username!);
         await prefs.setString("email", _email ?? "");
         await prefs.setString("displayName", _displayName ?? "");
+
+        // 👇 Persist superuser flag
+        await prefs.setBool("isSuperuser", _isSuperuser);
+
         return true;
       }
     } catch (e) {
       debugPrint("❌ Login error: $e");
     }
+
     return false;
   }
 
-  /// -------------------------
+  /// ---------------------------------------------------
   /// REGISTER
-  /// -------------------------
+  /// ---------------------------------------------------
   Future<bool> register(
     ApiService api,
     String username,
@@ -81,15 +101,13 @@ class AuthState extends ChangeNotifier {
       debugPrint("❌ Register error: $e");
       throw Exception("Registration failed");
     }
+
     return false;
   }
 
-  /// -------------------------
+  /// ---------------------------------------------------
   /// RESET PASSWORD
-  /// -------------------------
-  /// -------------------------
-  /// RESET PASSWORD
-  /// -------------------------
+  /// ---------------------------------------------------
   Future<bool> resetPassword(
     ApiService api,
     String username,
@@ -111,24 +129,24 @@ class AuthState extends ChangeNotifier {
       if (response.statusCode == 200) {
         return true;
       } else if (response.statusCode == 404) {
-        // no match of username + email in backend
-        return false;
+        return false; // no matching user
       } else {
         debugPrint("❌ Reset failed: ${response.body}");
       }
     } catch (e) {
       debugPrint("❌ Reset password error: $e");
     }
+
     return false;
   }
 
-  /// -------------------------
-  /// AUTO-LOGIN
-  /// -------------------------
+  /// ---------------------------------------------------
+  /// AUTO LOGIN
+  /// ---------------------------------------------------
   Future<void> tryAutoLogin() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 👇 Check if guest mode was active
+    // Guest mode
     if (prefs.getBool("guestMode") ?? false) {
       _guestMode = true;
       notifyListeners();
@@ -140,19 +158,25 @@ class AuthState extends ChangeNotifier {
       _username = prefs.getString("username");
       _email = prefs.getString("email");
       _displayName = prefs.getString("displayName");
+
+      // 👇 Restore superuser value
+      _isSuperuser = prefs.getBool("isSuperuser") ?? false;
+
       notifyListeners();
     }
   }
 
-  /// -------------------------
+  /// ---------------------------------------------------
   /// LOGOUT
-  /// -------------------------
+  /// ---------------------------------------------------
   Future<void> logout() async {
     _loggedIn = false;
     _guestMode = false;
     _username = null;
     _email = null;
     _displayName = null;
+    _isSuperuser = false; // reset superuser on logout
+
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
@@ -161,14 +185,15 @@ class AuthState extends ChangeNotifier {
     await prefs.remove("email");
     await prefs.remove("displayName");
     await prefs.remove("guestMode");
+    await prefs.remove("isSuperuser"); // 👈 remove superuser persistence
   }
 
-  /// -------------------------
+  /// ---------------------------------------------------
   /// GUEST MODE
-  /// -------------------------
+  /// ---------------------------------------------------
   Future<void> setGuestMode(bool enabled) async {
     _guestMode = enabled;
-    _loggedIn = false; // make sure we treat it separately
+    _loggedIn = false;
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();

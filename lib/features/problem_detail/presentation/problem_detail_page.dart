@@ -733,6 +733,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
                       "wallId": widget.wallId,
                       "numCols": _cols,
                       "numRows": _rows,
+                      "superusers": widget.superusers,
                     },
                   );
                 },

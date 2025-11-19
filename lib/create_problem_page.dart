@@ -46,6 +46,8 @@ class CreateProblemPage extends StatefulWidget {
   // 👇 new: for editing published problems
   final bool isEditing;
 
+  final List<String> superusers;
+
   final List<String>? problemRow;
 
   const CreateProblemPage({
@@ -56,6 +58,7 @@ class CreateProblemPage extends StatefulWidget {
 
     this.isEditing = false,
     this.problemRow,
+    this.superusers = const [],
   });
 
   @override
@@ -649,6 +652,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
               editingDraft: editingDraft,
               editingProblem: editingProblem,
               problemRow: widget.problemRow,
+              superusers: widget.superusers,
               onSave:
                   (
                     String name,
@@ -1398,20 +1402,22 @@ class ConfirmReviewDialog extends StatelessWidget {
 }
 
 // ---------------- SAVE PROBLEM DIALOG ----------------
-
 class SaveProblemDialog extends StatefulWidget {
   final List<String>? problemRow;
   final int minGradeNum;
   final int footMode;
   final List<FootOption> footOptions;
   final bool editingDraft;
+  final bool editingProblem;
 
   final String? initialName;
   final String? initialComment;
   final String? initialGrade;
   final int? initialStars;
   final List<String>? initialFeetTokens;
-  final bool editingProblem; // 👈 NEW flag
+
+  /// You MUST pass superusers from CreateProblemPage
+  final List<String> superusers;
 
   final Function(
     String name,
@@ -1430,6 +1436,7 @@ class SaveProblemDialog extends StatefulWidget {
     required this.minGradeNum,
     required this.footMode,
     required this.footOptions,
+    required this.superusers,
     required this.onSave,
     this.editingDraft = false,
     this.editingProblem = false,
@@ -1449,14 +1456,13 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
   final commentCtrl = TextEditingController();
   String? grade;
   int stars = 1;
-
   final Map<String, bool> chosenFeetTokens = {};
 
   List<String> _allGradesFrom(int minNum) {
     final res = <String>[];
     for (int g = minNum; g <= 9; g++) {
       res.add("${g}a");
-      if (g == 9) break; // cap at 9a, no pluses or b/c
+      if (g == 9) break;
       res.add("${g}a+");
       res.add("${g}b");
       res.add("${g}b+");
@@ -1469,19 +1475,19 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
   @override
   void initState() {
     super.initState();
-    if (widget.problemRow != null) {
-      final rawName = widget.problemRow![1]; // e.g. "horny devil 5a"
-      final rawGrade = widget.problemRow![2]; // grade is stored separately
 
-      // strip grade suffix if it’s stuck on the end
-      final displayName = rawName.endsWith(rawGrade)
+    if (widget.problemRow != null) {
+      final rawName = widget.problemRow![1];
+      final rawGrade = widget.problemRow![2];
+
+      final cleanName = rawName.endsWith(rawGrade)
           ? rawName.substring(0, rawName.length - rawGrade.length).trim()
           : rawName;
 
-      nameCtrl.text = displayName; // 👈 just the name
-      grade = rawGrade; // 👈 proper grade field
-      commentCtrl.text = widget.problemRow![3]; // comment
-      stars = int.tryParse(widget.problemRow![5]) ?? 1; // stars
+      nameCtrl.text = cleanName;
+      grade = rawGrade;
+      commentCtrl.text = widget.problemRow![3];
+      stars = int.tryParse(widget.problemRow![5]) ?? 1;
     }
   }
 
@@ -1490,6 +1496,29 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
     final grades = _allGradesFrom(widget.minGradeNum);
     grade ??= grades.first;
 
+    /// ------------------------------
+    /// SUPERUSER LOGIC (MATCH DETAILS PAGE)
+    /// ------------------------------
+    final auth = context.watch<AuthState>();
+    final username = auth.username ?? "";
+
+    // setter column is widget.problemRow?[4]
+    final setter = widget.problemRow != null && widget.problemRow!.length > 4
+        ? widget.problemRow![4]
+        : "";
+
+    final bool isCreator = (setter == username);
+    final bool isSuper = widget.superusers.contains(username);
+
+    final bool canBenchmark = isCreator || isSuper;
+
+    // Debug
+    print(
+      "DEBUG SaveDialog -> username=$username, setter=$setter, "
+      "isCreator=$isCreator, isSuper=$isSuper, canBenchmark=$canBenchmark",
+    );
+
+    /// Init foot tokens
     if (widget.footMode == 1 && chosenFeetTokens.isEmpty) {
       for (final opt in widget.footOptions) {
         chosenFeetTokens[opt.holdToken] = false;
@@ -1497,7 +1526,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
     }
 
     return AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20), // wider dialog
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: const [
@@ -1507,7 +1536,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
         ],
       ),
       content: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.9, // ~90% of screen width
+        width: MediaQuery.of(context).size.width * 0.9,
         child: SingleChildScrollView(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom + 16,
@@ -1554,6 +1583,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
                   prefixIcon: Icon(Icons.star),
                 ),
               ),
+
               if (widget.footMode == 1 && widget.footOptions.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Align(
@@ -1581,56 +1611,81 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
           ),
         ),
       ),
+
       actions: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              OutlinedButton(
-                onPressed: () {
-                  final feetTokens = chosenFeetTokens.entries
-                      .where((e) => e.value)
-                      .map((e) => e.key)
-                      .toList();
-                  widget.onSave(
-                    nameCtrl.text.trim(),
-                    commentCtrl.text.trim(),
-                    grade ?? grades.first,
-                    stars,
-                    feetTokens,
-                    draft: true,
-                  );
-                  Navigator.pop(context);
-                },
-                child: const Text("Save Draft"),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final feetTokens = chosenFeetTokens.entries
-                      .where((e) => e.value)
-                      .map((e) => e.key)
-                      .toList();
-                  widget.onSave(
-                    nameCtrl.text.trim(),
-                    commentCtrl.text.trim(),
-                    grade ?? grades.first,
-                    stars,
-                    feetTokens,
-                    draft: false,
-                  );
-                  Navigator.pop(context);
-                },
-                child: Text(widget.editingProblem ? "Update" : "Save"),
-              ),
-            ],
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+
+        OutlinedButton(
+          onPressed: () {
+            final feetTokens = chosenFeetTokens.entries
+                .where((e) => e.value)
+                .map((e) => e.key)
+                .toList();
+            widget.onSave(
+              nameCtrl.text.trim(),
+              commentCtrl.text.trim(),
+              grade!,
+              stars,
+              feetTokens,
+              draft: true,
+            );
+            Navigator.pop(context);
+          },
+          child: const Text("Save Draft"),
+        ),
+
+        /// ⭐ BENCHMARK BUTTON (Correct Rules)
+        if (widget.editingProblem && canBenchmark)
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+            onPressed: () {
+              String c = commentCtrl.text.trim();
+
+              if (c.isEmpty || c == "No Comments") {
+                commentCtrl.text = "Benchmark";
+              } else if (!c.contains("Benchmark")) {
+                commentCtrl.text = "$c\nBenchmark";
+              }
+
+              final feetTokens = chosenFeetTokens.entries
+                  .where((e) => e.value)
+                  .map((e) => e.key)
+                  .toList();
+
+              widget.onSave(
+                nameCtrl.text.trim(),
+                commentCtrl.text.trim(),
+                grade!,
+                stars,
+                feetTokens,
+                draft: false,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text("Benchmark"),
           ),
+
+        ElevatedButton(
+          onPressed: () {
+            final feetTokens = chosenFeetTokens.entries
+                .where((e) => e.value)
+                .map((e) => e.key)
+                .toList();
+
+            widget.onSave(
+              nameCtrl.text.trim(),
+              commentCtrl.text.trim(),
+              grade!,
+              stars,
+              feetTokens,
+              draft: false,
+            );
+            Navigator.pop(context);
+          },
+          child: Text(widget.editingProblem ? "Update" : "Save"),
         ),
       ],
     );
