@@ -112,6 +112,7 @@ class _ClimbLightAppState extends State<ClimbLightApp>
               wallId: args["wallId"],
               problemName: args["problemName"],
               user: args["user"],
+              grade: args["grade"],
             );
           },
         ),

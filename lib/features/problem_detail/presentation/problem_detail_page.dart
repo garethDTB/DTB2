@@ -18,7 +18,7 @@ import '../../../mirror_utils.dart';
 import '../../../providers/problems_provider.dart';
 import 'package:dtb2/hold_point.dart';
 import 'package:dtb2/services/hold_loader.dart';
-
+import '../../../main.dart';
 import 'widgets/wall_view.dart';
 import 'widgets/action_buttons_row.dart';
 import 'widgets/swipe_hint_arrow.dart';
@@ -56,7 +56,7 @@ class ProblemDetailPage extends StatefulWidget {
   State<ProblemDetailPage> createState() => _ProblemDetailPageState();
 }
 
-class _ProblemDetailPageState extends State<ProblemDetailPage> {
+class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
   late int currentIndex;
   List<HoldPoint> holds = [];
   int footMode = 0;
@@ -77,7 +77,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   bool autoSendToBoard = false;
 
   File? wallImageFile;
-
+  List<Map<String, dynamic>> _allComments = [];
   String? _swipeMessage;
   Color _swipeMessageColor = Colors.black87;
 
@@ -98,6 +98,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     _loadGradeMode();
     _loadLikes();
     _loadWallImage();
+    _loadAllComments();
 
     _wsSub = ProblemUpdaterService.instance.messages.listen((msg) {
       if (!mounted) return;
@@ -111,27 +112,101 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _wsSub?.cancel();
-    super.dispose();
-  }
-
   String _buildTickerText() {
     final parts = <String>[];
 
-    final setter = (widget.problems[currentIndex]['setter'] ?? "").toString();
-    final comment = (widget.problems[currentIndex]['comment'] ?? "").toString();
+    // 1) Built-in problem metadata (setter + problem comment)
+    final setter = (widget.problems[currentIndex]['setter'] ?? "")
+        .toString()
+        .trim();
+    final baseComment = (widget.problems[currentIndex]['comment'] ?? "")
+        .toString()
+        .trim();
 
     if (setter.isNotEmpty) {
       parts.add("Setter: $setter");
     }
-
-    if (comment.isNotEmpty) {
-      parts.add("Comment: $comment");
+    if (baseComment.isNotEmpty) {
+      parts.add("Comment: $baseComment");
     }
 
-    return parts.isEmpty ? "" : parts.join("   •   ");
+    // 2) All DB comments from Azure (user, comment, suggested grade)
+    for (final c in _allComments) {
+      final user = (c['User'] ?? c['user'] ?? '').toString().trim();
+      final text = (c['Comment'] ?? c['comment'] ?? '').toString().trim();
+      final suggestedRaw = (c['Suggested_grade'] ?? c['suggested_grade'] ?? '')
+          .toString()
+          .trim();
+
+      if (user.isEmpty && text.isEmpty) continue;
+
+      String suggestedDisplay = "";
+
+      if (suggestedRaw.isNotEmpty) {
+        if (gradeMode == "vgrade") {
+          // Convert French to V-grade
+          suggestedDisplay = frenchToVGrade(suggestedRaw);
+        } else {
+          // Leave as French
+          suggestedDisplay = suggestedRaw;
+        }
+      }
+
+      if (suggestedDisplay.isNotEmpty) {
+        parts.add("user $user suggested $suggestedDisplay and said: $text");
+      } else {
+        parts.add("user $user said: $text");
+      }
+    }
+
+    // 3) Build one long single-line ticker string
+    String ticker = parts.join("   •   ");
+
+    return ticker
+        .replaceAll('\n', ' ') // remove newlines
+        .replaceAll('\r', ' ')
+        .replaceAll(RegExp(r'\s{2,}'), ' '); // collapse double spaces
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this); // ★ add this
+    _wsSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // User returned from comments page
+    _loadAllComments();
+    setState(() {});
+  }
+
+  Future<void> _loadAllComments() async {
+    final api = context.read<ApiService>();
+    final rawName = (widget.problems[currentIndex]['name'] ?? '').trim();
+
+    if (rawName.isEmpty) return;
+
+    try {
+      final comments = await api.getComments(widget.wallId, rawName);
+
+      setState(() {
+        // Make sure it's a list of maps
+        _allComments = comments.cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      debugPrint("Failed to load comments: $e");
+    }
   }
 
   Future<void> _loadMirrorDic() async {
@@ -258,6 +333,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     if (currentIndex < widget.problems.length - 1) {
       setState(() => currentIndex++);
       _loadLikes();
+      _loadAllComments();
       if (autoSendToBoard) _sendToBoard();
     }
   }
@@ -266,6 +342,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
     if (currentIndex > 0) {
       setState(() => currentIndex--);
       _loadLikes();
+      _loadAllComments();
       if (autoSendToBoard) _sendToBoard();
     }
   }
@@ -599,6 +676,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
         "wallId": widget.wallId,
         "problemName": (problem['name'] ?? '').toString(),
         "user": user,
+        "grade": (problem['grade'] ?? '').toString(),
       },
     );
   }
@@ -734,18 +812,28 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
                   });
                 },
                 child: SizedBox(
-                  height: 18,
+                  height: 20, // forces ONE text line, prevents wrapping
                   width: double.infinity,
                   child: Marquee(
                     text: _buildTickerText(),
-                    style: const TextStyle(color: Colors.black87, fontSize: 11),
-                    blankSpace: 40.0,
-                    velocity: 22.0,
-                    pauseAfterRound: _tickerPaused
-                        ? const Duration(days: 365) // effectively paused
-                        : const Duration(seconds: 1),
-                    startAfter: Duration.zero,
-                    startPadding: 0.0,
+                    scrollAxis: Axis.horizontal,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    blankSpace: 80.0,
+                    velocity: 24.0,
+                    pauseAfterRound: const Duration(seconds: 1),
+
+                    // ensure you see the start before scrolling
+                    startAfter: const Duration(seconds: 0),
+
+                    // push text fully onscreen before scrolling starts
+                    startPadding: 600.0,
+
+                    // IMPORTANT – prevents any text wrapping to a 2nd line
+                    style: const TextStyle(
+                      fontSize: 11,
+                      height: 1.0,
+                      overflow: TextOverflow.visible,
+                    ),
                   ),
                 ),
               ),
