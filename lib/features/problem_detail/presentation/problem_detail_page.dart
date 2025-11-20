@@ -298,9 +298,51 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
   }
 
   List<Map<String, String>> _normalizeHolds(dynamic raw) {
-    if (raw == null) return [];
+    // -------------------------------------
+    // 1. CASE: DB FORMAT (StartHolds / IntermediateHolds / FinishHold)
+    // -------------------------------------
+    // raw is expected to be a Map with these keys when coming from DB.
+    if (raw is Map<String, dynamic> &&
+        raw.containsKey("StartHolds") &&
+        raw.containsKey("IntermediateHolds") &&
+        raw.containsKey("FinishHold")) {
+      final start = raw["StartHolds"]?.cast<String>() ?? [];
+      final intermediate = raw["IntermediateHolds"]?.cast<String>() ?? [];
+      final finish = raw["FinishHold"]?.toString() ?? "";
 
-    // Case 1: list of strings
+      final List<Map<String, String>> out = [];
+
+      // Add Start holds
+      for (final h in start) {
+        out.add({'type': 'start', 'label': h});
+      }
+
+      // Add Intermediate & Feet
+      bool feetMode = false;
+      for (final h in intermediate) {
+        if (h.toLowerCase() == "feet") {
+          feetMode = true;
+          continue;
+        }
+        if (feetMode) {
+          out.add({'type': 'feet', 'label': h});
+        } else {
+          out.add({'type': 'intermediate', 'label': h});
+        }
+      }
+
+      // Add Finish hold (ALWAYS explicit)
+      if (finish.isNotEmpty) {
+        out.add({'type': 'finish', 'label': finish});
+      }
+
+      debugPrint("✅ Normalized (DB format) → $out");
+      return out;
+    }
+
+    // -------------------------------------
+    // 2. CASE: LIST OF STRINGS (legacy / older boards)
+    // -------------------------------------
     if (raw is List && raw.isNotEmpty && raw.first is String) {
       final strHolds = raw.cast<String>();
       final result = <Map<String, String>>[];
@@ -313,7 +355,9 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
       for (int i = 0; i < problemHolds.length; i++) {
         final h = problemHolds[i];
-        if (i == 0 || i == 1) {
+        if (i == 0) {
+          result.add({'type': 'start', 'label': h});
+        } else if (i == 1) {
           result.add({'type': 'start', 'label': h});
         } else if (i == problemHolds.length - 1) {
           result.add({'type': 'finish', 'label': h});
@@ -323,16 +367,16 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
       }
 
       for (final h in footHolds) {
-        if (h.toLowerCase() != "feet") {
-          result.add({'type': 'feet', 'label': h});
-        }
+        result.add({'type': 'feet', 'label': h});
       }
 
-      debugPrint("✅ Normalized (strings) → $result");
+      debugPrint("✅ Normalized (legacy strings) → $result");
       return result;
     }
 
-    // Case 2: list of maps
+    // -------------------------------------
+    // 3. CASE: MAP-BASED HOLDS (editor output)
+    // -------------------------------------
     if (raw is List && raw.isNotEmpty && raw.first is Map) {
       final result = <Map<String, String>>[];
       bool seenFeetMarker = false;
@@ -344,26 +388,23 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> {
 
         if (label.toLowerCase() == "feet") {
           seenFeetMarker = true;
-          continue; // skip the marker itself
+          continue;
         }
 
         final isLast = (i == raw.length - 1);
 
         if (isLast) {
-          // ✅ Always keep last hold as finish
           result.add({"type": "finish", "label": label});
         } else if (seenFeetMarker) {
-          // ✅ After marker → feet
           result.add({"type": "feet", "label": label});
         } else {
-          // ✅ Otherwise keep existing type
           result.add({"type": type, "label": label});
         }
       }
-
-      debugPrint("✅ Normalized (maps) → $result");
+      debugPrint("✅ Normalized (map holds) → $result");
       return result;
     }
+
     return [];
   }
 

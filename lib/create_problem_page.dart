@@ -89,12 +89,11 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
   List<FootOption> footOptions = [];
   final Set<int> feetSelected = {};
   List<String> footMode1TokensSelected = [];
-
   List<HoldPoint> holds = [];
-
   int minGradeNum = 4;
   File? wallImageFile;
-
+  Timer? _sendThrottle;
+  bool _sendQueued = false;
   late DraftService draftService; // 👈 new service
 
   static const bool kHoldDebug = true;
@@ -111,6 +110,32 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     final holdId = "hold$wsIndex";
     final label = labelForWs(wsIndex, cols, rows);
     debugPrint("🧩 SAVE-SEL  ws=$wsIndex -> $holdId (label=$label)");
+  }
+
+  void _queueSend() {
+    // If throttle is active, just remember a send request happened
+    if (_sendThrottle?.isActive ?? false) {
+      _sendQueued = true;
+      return;
+    }
+
+    // Send immediately
+    _sendNow();
+
+    // Start throttle timer
+    _sendThrottle = Timer(const Duration(milliseconds: 300), () {
+      if (_sendQueued) {
+        _sendQueued = false;
+        _sendNow();
+      }
+    });
+  }
+
+  void _sendNow() {
+    if (!mounted) return;
+
+    // Call your existing function
+    _sendToBoardWithFeedback();
   }
 
   Future<void> _sendToBoardWithFeedback() async {
@@ -384,7 +409,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
     // ✅ Special case: auto-send active
     if (autoSend && selectionOrder.isNotEmpty) {
-      _sendToBoardWithFeedback();
+      _queueSend();
     }
   }
 
@@ -405,7 +430,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
       }
       setState(() {});
       if (autoSend) {
-        _sendToBoardWithFeedback();
+        _queueSend();
       }
       return;
     }
@@ -421,7 +446,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     }
     setState(() {});
     if (autoSend) {
-      _sendToBoardWithFeedback();
+      _queueSend();
     }
   }
 
