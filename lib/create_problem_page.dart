@@ -14,6 +14,7 @@ import 'services/websocket_service.dart';
 import 'package:collection/collection.dart';
 import 'package:dtb2/services/hold_loader.dart';
 import 'services/problem_services.dart';
+import 'dart:math';
 
 // ---------------- ENUMS ----------------
 
@@ -1268,7 +1269,6 @@ class _HoldButton extends StatelessWidget {
     }
 
     return GestureDetector(
-      // Base circle size scales with cols
       onTap: () {
         if (confirmStage == ConfirmStage.none ||
             confirmStage == ConfirmStage.feet) {
@@ -1280,14 +1280,18 @@ class _HoldButton extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Container(
-            width: radius * 2,
-            height: radius * 2,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.transparent,
-            ),
+          // 👇 NEW: small dynamic hitbox based on rows/cols
+          Builder(
+            builder: (_) {
+              final double hitSize = (240 / max(rows, cols)).clamp(6, 40);
+              return SizedBox(
+                width: hitSize,
+                height: hitSize,
+                child: const ColoredBox(color: Colors.transparent),
+              );
+            },
           ),
+
           if (color != null) ...[
             Container(
               width: baseCircle,
@@ -1298,8 +1302,8 @@ class _HoldButton extends StatelessWidget {
               ),
             ),
             Container(
-              width: (baseCircle - 6),
-              height: (baseCircle - 6),
+              width: baseCircle - 6,
+              height: baseCircle - 6,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: color, width: 4),
