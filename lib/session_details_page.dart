@@ -36,7 +36,7 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
   }
 
   // --------------------------
-  // DELETE by INDEX (not name)
+  // DELETE by INDEX (owner only)
   // --------------------------
   Future<void> _deleteProblem(int index) async {
     final confirm = await showDialog<bool>(
@@ -66,11 +66,10 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
       final api = context.read<ApiService>();
       final auth = context.read<AuthState>();
 
-      // IMPORTANT: send index instead of problem name
       final updatedJson = await api.deleteSentProblem(
         _session.wall,
         _session.id,
-        index, // ⭐ delete specific item
+        index,
         auth.username ?? "guest",
       );
 
@@ -100,6 +99,9 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthState>();
+    final bool isOwner = auth.username == _session.user;
+
     final attempts = _session.attempts;
     final sent = _session.sent;
 
@@ -176,16 +178,24 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
                               ),
                               backgroundColor: Colors.blue[100],
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteProblem(index),
-                            ),
+
+                            // --------------------------
+                            // DELETE ONLY IF OWNER
+                            // --------------------------
+                            if (isOwner)
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _deleteProblem(index),
+                              ),
                           ],
                         ),
                       );
                     })
-                  : [
-                      const ListTile(
+                  : const [
+                      ListTile(
                         title: Text("No problems sent in this session."),
                       ),
                     ],

@@ -165,6 +165,18 @@ class ApiService {
     return data as Map<String, dynamic>; // full updated session
   }
 
+  /// ✅ NEW: sessions for wall since a given date (for fast leaderboard)
+  Future<List<Map<String, dynamic>>> getSessionsForWallSince(
+    String wallId,
+    DateTime since,
+  ) async {
+    // Use UTC ISO string so backend can parse easily
+    final iso = since.toUtc().toIso8601String();
+    final url = Uri.parse('$baseUrl/walls/$wallId/sessions?since=$iso');
+    final data = await _getJson(url);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
   /// ------------------------------
   /// Local likes cache
   /// ------------------------------
@@ -440,5 +452,19 @@ class ApiService {
       "Date": DateTime.now().toIso8601String(),
     };
     await _postJson(url, payload);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllSessionsForWall(
+    String wallId,
+  ) async {
+    final url = Uri.parse('$baseUrl/walls/$wallId/sessions');
+    final data = await _getJson(url);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> getUser(String username) async {
+    final url = Uri.parse('$baseUrl/users/$username');
+    final data = await _getJson(url);
+    return data as Map<String, dynamic>;
   }
 }

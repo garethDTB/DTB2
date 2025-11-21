@@ -10,7 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
 import '../main.dart'; // gives access to routeObserver
-
+import 'logbook_and_leaderboard_page.dart';
 import 'auth_state.dart';
 import 'login_page.dart';
 import 'load_problems_page.dart';
@@ -934,8 +934,9 @@ class _WallLogPageState extends State<WallLogPage>
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        LogBookPage(wallId: selectedWall!),
+                                    builder: (_) => LogBookAndLeaderboardPage(
+                                      wallId: selectedWall!,
+                                    ),
                                   ),
                                 );
                               },

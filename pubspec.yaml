@@ -43,12 +43,12 @@ dependencies:
   latlong2: ^0.9.1
   csv: ^6.0.0
   sticky_grouped_list: ^3.1.0
-  fl_chart: ^0.68.0 
   cupertino_icons: ^1.0.8
   dropdown_button2: ^2.3.9
   dropbox_client: ^1.2.0
   web_socket_channel: ^2.4.0
   marquee: ^2.2.3
+  fl_chart: ^0.69.0 
 
 
   
