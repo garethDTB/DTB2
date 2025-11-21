@@ -17,9 +17,10 @@ class SessionDetailsPage extends StatefulWidget {
   State<SessionDetailsPage> createState() => _SessionDetailsPageState();
 }
 
-class _SessionDetailsPageState extends State<SessionDetailsPage> {
+class _SessionDetailsPageState extends State<SessionDetailsPage>
+    with TickerProviderStateMixin {
   late Session _session;
-  String gradeMode = "french"; // default
+  String gradeMode = "french";
 
   @override
   void initState() {
@@ -35,16 +36,27 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
     });
   }
 
-  // --------------------------
-  // DELETE by INDEX (owner only)
-  // --------------------------
-  Future<void> _deleteProblem(int index) async {
+  void _showMessage(String text, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: error ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // DELETE (no undo)
+  // --------------------------------------------------------------------------
+  Future<void> _deleteProblem(int index, String grade) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Delete Problem"),
         content: const Text(
-          "Are you sure you want to permanently delete this problem from your logbook? This cannot be undone.",
+          "Are you sure you want to permanently delete this problem from your logbook?\n\n"
+          "⚠️ This action cannot be undone.",
         ),
         actions: [
           TextButton(
@@ -66,35 +78,62 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
       final api = context.read<ApiService>();
       final auth = context.read<AuthState>();
 
+      final reduction = getPointsForGrade(grade);
+
       final updatedJson = await api.deleteSentProblem(
         _session.wall,
         _session.id,
         index,
         auth.username ?? "guest",
+        reduction: reduction,
       );
 
       setState(() {
         _session = Session.fromJson(updatedJson);
+
+        // Score cannot be negative
+        if (_session.score < 0) {
+          _session = Session(
+            id: _session.id,
+            user: _session.user,
+            wall: _session.wall,
+            date: _session.date,
+            score: 0,
+            attempts: _session.attempts,
+            sent: _session.sent,
+          );
+        }
+
+        // If no sent problems left → score = 0
+        if (_session.sent.isEmpty) {
+          _session = Session(
+            id: _session.id,
+            user: _session.user,
+            wall: _session.wall,
+            date: _session.date,
+            score: 0,
+            attempts: _session.attempts,
+            sent: _session.sent,
+          );
+        }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Problem deleted successfully")),
-      );
+      _showMessage("Problem deleted successfully");
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Failed to delete: $e")));
+      _showMessage("Failed to delete: $e", error: true);
     }
   }
 
-  String _displayProblemName(SentProblem problem) {
-    final rawName = problem.problem;
-    final grade = problem.grade;
+  // --------------------------------------------------------------------------
+  // Grade label conversion
+  // --------------------------------------------------------------------------
+  String _displayProblemName(SentProblem p) {
+    if (gradeMode != "vgrade") return p.problem;
 
-    if (gradeMode == "vgrade") {
-      return rawName.replaceAll(grade, frenchToVGrade(grade));
-    }
-    return rawName;
+    final v = frenchToVGrade(p.grade);
+    final pattern = RegExp(r"(\\s*\\(?${RegExp.escape(p.grade)}\\)?)\$");
+
+    return p.problem.replaceAll(pattern, " $v");
   }
 
   @override
@@ -118,43 +157,56 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          "${_session.wall} — "
-          "${DateFormat.yMMMd().format(_session.date)}",
+          "${_session.wall} — ${DateFormat.yMMMd().format(_session.date)}",
         ),
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
-            // Summary Card
+            // ------------------- SUMMARY -------------------
             Card(
+              elevation: 2,
               margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: const Icon(Icons.info, color: Colors.blue),
-                title: Text(
-                  "Score: ${_session.score}",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Score: ${_session.score}",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text("Problems sent: $totalSent"),
+                    Text("Total attempts: $totalAttempts"),
+                    Text("Avg attempts per send: $avgAttempts"),
+                  ],
                 ),
-                subtitle: Text("Problems sent: $totalSent"),
               ),
             ),
 
-            // Attempts Section
+            // ------------------- ATTEMPTS -------------------
             if (attempts.isNotEmpty)
               ExpansionTile(
                 title: const Text(
                   "Attempts",
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                children: attempts.map((a) {
-                  return ListTile(
-                    title: Text(a.problem),
-                    trailing: Text("${a.attempts} tries"),
-                  );
-                }).toList(),
+                children: attempts
+                    .map(
+                      (a) => ListTile(
+                        title: Text(a.problem),
+                        trailing: Text("${a.attempts} tries"),
+                      ),
+                    )
+                    .toList(),
               ),
 
-            // Sent Problems Section
+            // ------------------- SENT PROBLEMS -------------------
             ExpansionTile(
               initiallyExpanded: true,
               title: const Text(
@@ -165,32 +217,44 @@ class _SessionDetailsPageState extends State<SessionDetailsPage> {
                   ? List.generate(sent.length, (index) {
                       final s = sent[index];
 
-                      return ListTile(
-                        title: Text(_displayProblemName(s)),
-                        trailing: Wrap(
-                          spacing: 8,
-                          children: [
-                            Chip(
-                              label: Text(
-                                gradeMode == "vgrade"
-                                    ? frenchToVGrade(s.grade)
-                                    : s.grade,
-                              ),
-                              backgroundColor: Colors.blue[100],
+                      return AnimatedSize(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 8,
+                          ),
+                          child: ListTile(
+                            tileColor: Colors.grey[50],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
-
-                            // --------------------------
-                            // DELETE ONLY IF OWNER
-                            // --------------------------
-                            if (isOwner)
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
+                            title: Text(_displayProblemName(s)),
+                            subtitle: Text("Attempts: ${s.attempts}"),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Chip(
+                                  label: Text(
+                                    gradeMode == "vgrade"
+                                        ? frenchToVGrade(s.grade)
+                                        : s.grade,
+                                  ),
                                 ),
-                                onPressed: () => _deleteProblem(index),
-                              ),
-                          ],
+
+                                if (isOwner)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () =>
+                                        _deleteProblem(index, s.grade),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     })

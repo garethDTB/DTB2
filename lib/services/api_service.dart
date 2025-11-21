@@ -232,19 +232,17 @@ class ApiService {
     String wallId,
     String sessionId,
     int index,
-    String user,
-  ) async {
+    String user, {
+    required int reduction,
+  }) async {
     final url = Uri.parse(
-      '$baseUrl/walls/$wallId/sessions/$sessionId/sent/$index?user=$user',
+      '$baseUrl/walls/$wallId/sessions/$sessionId/sent/$index'
+      '?user=$user&reduction=$reduction',
     );
 
     final resp = await http.delete(url);
-
     if (resp.statusCode != 200) {
-      throw Exception(
-        "Failed to delete sent problem at index [$index] from session $sessionId "
-        "status [${resp.statusCode}] ${resp.body}",
-      );
+      throw Exception("Failed to delete");
     }
 
     return json.decode(resp.body) as Map<String, dynamic>;
