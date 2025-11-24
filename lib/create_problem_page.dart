@@ -763,7 +763,16 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
                     // feetMode=2 → add "feet" marker + selected foot holds
                     if (footMode == 2 && feetSelected.isNotEmpty) {
+                      // Remove foot holds from intermediates (correcting for label vs wsIndex)
+                      intermediates.removeWhere((label) {
+                        final ws = tryWsIndexFromLabel(label, cols, rows);
+                        return ws != null && feetSelected.contains(ws);
+                      });
+
+                      // Append feet section
                       intermediates.add("feet");
+
+                      // Add feet only once
                       intermediates.addAll(feetSelected.map((ws) => "hold$ws"));
                     }
 
@@ -1308,7 +1317,7 @@ class _HoldButton extends StatelessWidget {
           // 👇 NEW: small dynamic hitbox based on rows/cols
           Builder(
             builder: (_) {
-              final double hitSize = (240 / max(rows, cols)).clamp(6, 40);
+              final double hitSize = (240 / max(rows, cols)).clamp(12, 40);
               return SizedBox(
                 width: hitSize,
                 height: hitSize,

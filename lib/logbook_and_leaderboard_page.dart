@@ -1,12 +1,18 @@
 // logbook_and_leaderboard_page.dart
 //
 // LogBook + Enhanced Leaderboard with:
-// - Fast default mode (last 90 days window)
+// - Fast-ish mode (90-day window for most use cases, no backend changes)
 // - Filters: 7d / 30d / 90d / 365d / All time
 // - Culmination vs Best Session toggle
-// - Top-5 bar chart
-// - "You vs Leader" comparison card
+// - Weekly & Monthly streaks (per username)
+// - Interactive chart area:
+//     * Top-5 bar chart (tap to inspect)
+//     * "My Progress" line chart (tap points)
+// - Tap-to-compare two users (long-press rows)
+// - "Rising Star" of the last 30 days
 // - 🥇🥈🥉 ranking badges
+//
+// Uses usernames only (no user profile lookups).
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -83,7 +89,7 @@ class _LogBookPageState extends State<LogBookPage> {
           ..sort((a, b) => b.date.compareTo(a.date));
       });
     } catch (_) {
-      // swallow errors -> show empty with 0 stats
+      // ignore errors -> empty state shown
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -168,7 +174,7 @@ class _LogBookPageState extends State<LogBookPage> {
 }
 
 //---------------------------------------------------------
-// LEADERBOARD PAGE (FAST MODE + CHART + COMPARISON)
+// LEADERBOARD PAGE (FAST-ish + STREAKS + CHARTS + COMPARE)
 //---------------------------------------------------------
 class LeaderboardPage extends StatefulWidget {
   final String wallId;
@@ -182,20 +188,29 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   // All sessions for the wall (full history).
   List<Session> _allSessions = [];
 
-  // Recent sessions (last 90 days) – used for fast default mode.
+  // Recent sessions (last 90 days) – used for fast default calculations.
   List<Session> _recent90Sessions = [];
-
-  // username → display name
-  final Map<String, String> _displayNames = {};
 
   bool _loading = true;
   String? _error;
 
-  // Filter window in days: 7, 30, 90, 365, 9999
+  // Filter window in days: 7, 30, 90, 365, 9999 (all).
   int _filterDays = 30;
 
   // true = cumulative (total score in window), false = best single session
   bool _cumulativeMode = true;
+
+  // Chart mode: false = bar (Top 5), true = line (My Progress)
+  bool _showLineChart = false;
+
+  // Interactive bar chart touched index
+  int? _touchedBarIndex;
+
+  // Interactive line chart touched index
+  int? _touchedLineIndex;
+
+  // Compare selection: up to 2 usernames
+  final List<String> _compareSelection = [];
 
   @override
   void initState() {
@@ -207,6 +222,9 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _touchedBarIndex = null;
+      _touchedLineIndex = null;
+      _compareSelection.clear();
     });
 
     final api = context.read<ApiService>();
@@ -221,17 +239,12 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       final cutoff90 = now.subtract(const Duration(days: 90));
       final recent = sessions.where((s) => s.date.isAfter(cutoff90)).toList();
 
-      final usernames = sessions.map((s) => s.user).toSet();
-
       if (!mounted) return;
       setState(() {
         _allSessions = sessions;
         _recent90Sessions = recent;
         _loading = false;
       });
-
-      // Fetch display names in the background (non-blocking for UI).
-      _fetchDisplayNames(api, usernames);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -241,33 +254,8 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     }
   }
 
-  Future<void> _fetchDisplayNames(ApiService api, Set<String> usernames) async {
-    try {
-      final futures = usernames.map((u) async {
-        try {
-          final userResp = await api.getUser(u);
-          final dn = userResp["display_name"] as String? ?? u;
-          return MapEntry(u, dn);
-        } catch (_) {
-          return MapEntry(u, u);
-        }
-      }).toList();
-
-      final results = await Future.wait(futures);
-      if (!mounted) return;
-
-      setState(() {
-        for (final e in results) {
-          _displayNames[e.key] = e.value;
-        }
-      });
-    } catch (_) {
-      // ignore name fetch errors silently
-    }
-  }
-
   // --------------------------------------------------
-  // Filter change with heavy warning for big windows
+  // Filter change with warning for big windows
   // --------------------------------------------------
   Future<void> _onFilterSelected(int days) async {
     if (days == _filterDays) return;
@@ -278,7 +266,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
         builder: (ctx) => AlertDialog(
           title: const Text("This might be slow"),
           content: const Text(
-            "Loading and crunching a full year or all-time history on a busy board "
+            "Loading and crunching a full year or all-time history on a busy wall "
             "can take a little while. Continue?",
           ),
           actions: [
@@ -297,19 +285,23 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       if (proceed != true) return;
     }
 
-    setState(() => _filterDays = days);
+    setState(() {
+      _filterDays = days;
+      _touchedBarIndex = null;
+      _touchedLineIndex = null;
+    });
   }
 
   //--------------------------------------------------
-  // Build leaderboard data for current filter + mode
+  // Leaderboard data builder for current filter + mode
   //--------------------------------------------------
   List<Map<String, dynamic>> _buildLeaderboard() {
     final now = DateTime.now();
 
-    // Fast path: for ≤ 90 days, only look at recent sessions.
+    // For ≤ 90 days, only inspect the recent subset for speed.
     final source = _filterDays <= 90 ? _recent90Sessions : _allSessions;
-
     final cutoff = now.subtract(Duration(days: _filterDays));
+
     final window = source.where((s) => s.date.isAfter(cutoff)).toList();
 
     final totals = <String, int>{};
@@ -338,7 +330,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
 
       entries.add({
         "user": user,
-        "display": _displayNames[user] ?? user,
+        "display": user, // username only
         "total": totalScore,
         "best": bestScore,
         "avg": avgScore,
@@ -352,6 +344,167 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     return entries;
   }
 
+  // --------------------------------------------------
+  // Streak helpers
+  // --------------------------------------------------
+
+  /// Weekly streak: consecutive weeks (current week backwards)
+  /// where user has ≥1 session.
+  int _computeWeeklyStreak(String username) {
+    final userSessions = _allSessions.where((s) => s.user == username).toList();
+    if (userSessions.isEmpty) return 0;
+
+    // Use Mondays as week keys
+    final weekKeys = <DateTime>{};
+    for (final s in userSessions) {
+      final d = s.date;
+      final monday = DateTime(
+        d.year,
+        d.month,
+        d.day,
+      ).subtract(Duration(days: d.weekday - 1));
+      weekKeys.add(DateTime(monday.year, monday.month, monday.day));
+    }
+
+    if (weekKeys.isEmpty) return 0;
+
+    final sorted = weekKeys.toList()..sort((a, b) => a.compareTo(b));
+
+    // Start from the last week key
+    DateTime currentWeek = DateTime.now().subtract(
+      Duration(days: DateTime.now().weekday - 1),
+    );
+    int streak = 0;
+
+    while (true) {
+      // Find if currentWeek exists in sorted set
+      final exists = sorted.any(
+        (w) =>
+            w.year == currentWeek.year &&
+            w.month == currentWeek.month &&
+            w.day == currentWeek.day,
+      );
+      if (!exists) break;
+
+      streak += 1;
+      currentWeek = currentWeek.subtract(const Duration(days: 7));
+    }
+
+    return streak;
+  }
+
+  /// Monthly streak: consecutive months (current month backwards)
+  /// where user has ≥1 session.
+  int _computeMonthlyStreak(String username) {
+    final userSessions = _allSessions.where((s) => s.user == username).toList();
+    if (userSessions.isEmpty) return 0;
+
+    final monthKeys = <DateTime>{};
+    for (final s in userSessions) {
+      final d = s.date;
+      monthKeys.add(DateTime(d.year, d.month));
+    }
+
+    if (monthKeys.isEmpty) return 0;
+
+    final sorted = monthKeys.toList()..sort((a, b) => a.compareTo(b));
+
+    DateTime now = DateTime.now();
+    DateTime currentMonth = DateTime(now.year, now.month);
+    int streak = 0;
+
+    while (true) {
+      final exists = sorted.any(
+        (m) => m.year == currentMonth.year && m.month == currentMonth.month,
+      );
+      if (!exists) break;
+
+      streak += 1;
+
+      // Go to previous month
+      int year = currentMonth.year;
+      int month = currentMonth.month - 1;
+      if (month == 0) {
+        month = 12;
+        year -= 1;
+      }
+      currentMonth = DateTime(year, month);
+    }
+
+    return streak;
+  }
+
+  // --------------------------------------------------
+  // Rising Star (last 30 days, average/session improvement)
+  // --------------------------------------------------
+  Map<String, dynamic>? _computeRisingStar() {
+    if (_allSessions.isEmpty) return null;
+
+    final now = DateTime.now();
+    final startLast30 = now.subtract(const Duration(days: 30));
+    final startPrev30 = now.subtract(const Duration(days: 60));
+
+    // user → list of sessions
+    final byUser = <String, List<Session>>{};
+    for (final s in _allSessions) {
+      byUser.putIfAbsent(s.user, () => []).add(s);
+    }
+
+    String? bestUser;
+    double bestDelta = 0.0;
+    double bestAvgLast = 0.0;
+    double bestAvgPrev = 0.0;
+    int bestCountLast = 0;
+    int bestCountPrev = 0;
+
+    byUser.forEach((user, sessions) {
+      final last30 = sessions
+          .where((s) => s.date.isAfter(startLast30))
+          .toList();
+      final prev30 = sessions
+          .where(
+            (s) => s.date.isAfter(startPrev30) && !s.date.isAfter(startLast30),
+          )
+          .toList();
+
+      if (last30.isEmpty || prev30.isEmpty) return;
+
+      final totalLast = last30
+          .fold<int>(0, (sum, s) => sum + s.score)
+          .toDouble();
+      final totalPrev = prev30
+          .fold<int>(0, (sum, s) => sum + s.score)
+          .toDouble();
+
+      final avgLast = totalLast / last30.length;
+      final avgPrev = totalPrev / prev30.length;
+      final delta = avgLast - avgPrev;
+
+      if (delta > bestDelta && delta > 0) {
+        bestDelta = delta;
+        bestUser = user;
+        bestAvgLast = avgLast;
+        bestAvgPrev = avgPrev;
+        bestCountLast = last30.length;
+        bestCountPrev = prev30.length;
+      }
+    });
+
+    if (bestUser == null) return null;
+
+    return {
+      "user": bestUser,
+      "delta": bestDelta,
+      "avgLast": bestAvgLast,
+      "avgPrev": bestAvgPrev,
+      "sessionsLast": bestCountLast,
+      "sessionsPrev": bestCountPrev,
+    };
+  }
+
+  // --------------------------------------------------
+  // Labels
+  // --------------------------------------------------
   String _filterLabel() {
     switch (_filterDays) {
       case 7:
@@ -397,6 +550,31 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           label: const Text("Best Session"),
           selected: !_cumulativeMode,
           onSelected: (_) => setState(() => _cumulativeMode = false),
+        ),
+      ],
+    );
+  }
+
+  Widget _chartToggle() {
+    return Wrap(
+      spacing: 8,
+      alignment: WrapAlignment.center,
+      children: [
+        ChoiceChip(
+          label: const Text("Top 5"),
+          selected: !_showLineChart,
+          onSelected: (_) => setState(() {
+            _showLineChart = false;
+            _touchedBarIndex = null;
+          }),
+        ),
+        ChoiceChip(
+          label: const Text("My Progress"),
+          selected: _showLineChart,
+          onSelected: (_) => setState(() {
+            _showLineChart = true;
+            _touchedLineIndex = null;
+          }),
         ),
       ],
     );
@@ -472,6 +650,9 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     );
   }
 
+  // --------------------------------------------------
+  // Top-5 bar chart (interactive)
+  // --------------------------------------------------
   Widget _buildTop5Chart(List<Map<String, dynamic>> entries) {
     if (entries.isEmpty) return const SizedBox.shrink();
 
@@ -486,6 +667,17 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     if (maxY <= 0) maxY = 1;
     maxY *= 1.1;
 
+    String infoText;
+    if (_touchedBarIndex != null &&
+        _touchedBarIndex! >= 0 &&
+        _touchedBarIndex! < top5.length) {
+      final row = top5[_touchedBarIndex!];
+      infoText =
+          "${row["display"]} — ${(row["metric"] as num).toStringAsFixed(0)} pts";
+    } else {
+      infoText = "Tap a bar to see their points.";
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Padding(
@@ -497,6 +689,11 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
               "Top 5 — ${_filterLabel()} (${_modeLabel()})",
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 4),
+            Text(
+              infoText,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 8),
             SizedBox(
               height: 220,
@@ -504,7 +701,22 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                 BarChartData(
                   maxY: maxY,
                   alignment: BarChartAlignment.spaceAround,
-                  barTouchData: BarTouchData(enabled: true),
+                  barTouchData: BarTouchData(
+                    enabled: true,
+                    touchCallback: (event, response) {
+                      if (!event.isInterestedForInteractions ||
+                          response == null ||
+                          response.spot == null) {
+                        setState(() {
+                          _touchedBarIndex = null;
+                        });
+                        return;
+                      }
+                      setState(() {
+                        _touchedBarIndex = response.spot!.touchedBarGroupIndex;
+                      });
+                    },
+                  ),
                   titlesData: FlTitlesData(
                     leftTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
@@ -562,6 +774,153 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     );
   }
 
+  // --------------------------------------------------
+  // Line chart: "My Progress" for current user
+  // --------------------------------------------------
+  Widget _buildMyProgressChart(String? myUsername) {
+    if (myUsername == null) {
+      return const SizedBox.shrink();
+    }
+
+    final now = DateTime.now();
+    final cutoff = now.subtract(Duration(days: _filterDays));
+
+    final mySessions =
+        _allSessions
+            .where((s) => s.user == myUsername && s.date.isAfter(cutoff))
+            .toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
+
+    if (mySessions.isEmpty) {
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            "No sessions for you in ${_filterLabel().toLowerCase()}.",
+          ),
+        ),
+      );
+    }
+
+    final spots = <FlSpot>[];
+    for (var i = 0; i < mySessions.length; i++) {
+      spots.add(FlSpot(i.toDouble(), mySessions[i].score.toDouble()));
+    }
+
+    String infoText;
+    if (_touchedLineIndex != null &&
+        _touchedLineIndex! >= 0 &&
+        _touchedLineIndex! < mySessions.length) {
+      final s = mySessions[_touchedLineIndex!];
+      final dateStr = DateFormat.MMMd().format(s.date);
+      infoText = "$dateStr — ${s.score} pts";
+    } else {
+      infoText = "Tap a point to inspect that session.";
+    }
+
+    double maxY = mySessions
+        .map((s) => s.score.toDouble())
+        .reduce((a, b) => a > b ? a : b);
+    if (maxY <= 0) maxY = 1;
+    maxY *= 1.1;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "My Progress — ${_filterLabel()}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              infoText,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 220,
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: (spots.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: maxY,
+                  lineTouchData: LineTouchData(
+                    enabled: true,
+                    touchCallback: (event, response) {
+                      if (!event.isInterestedForInteractions ||
+                          response == null ||
+                          response.lineBarSpots == null ||
+                          response.lineBarSpots!.isEmpty) {
+                        setState(() {
+                          _touchedLineIndex = null;
+                        });
+                        return;
+                      }
+                      final spot = response.lineBarSpots!.first;
+                      setState(() {
+                        _touchedLineIndex = spot.x.toInt();
+                      });
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    leftTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final idx = value.toInt();
+                          if (idx < 0 || idx >= mySessions.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final d = mySessions[idx].date;
+                          final label = DateFormat.Md().format(d);
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              label,
+                              style: const TextStyle(fontSize: 9),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      isCurved: true,
+                      spots: spots,
+                      dotData: const FlDotData(show: true),
+                      belowBarData: BarAreaData(show: false),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --------------------------------------------------
+  // Rank leading widget (🥇 🥈 🥉 / #4 etc.)
+  // --------------------------------------------------
   Widget _buildRankLeading(int index) {
     switch (index) {
       case 0:
@@ -598,6 +957,220 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       context,
       MaterialPageRoute(
         builder: (_) => UserSessionsPage(user: username, sessions: sessions),
+      ),
+    );
+  }
+
+  //--------------------------------------------------
+  // Long-press to select up to 2 users for comparison
+  //--------------------------------------------------
+  void _toggleCompareUser(String username) {
+    setState(() {
+      if (_compareSelection.contains(username)) {
+        _compareSelection.remove(username);
+      } else {
+        if (_compareSelection.length == 2) {
+          // Replace the first selected user
+          _compareSelection.removeAt(0);
+        }
+        _compareSelection.add(username);
+      }
+    });
+  }
+
+  Widget _buildComparisonCard(List<Map<String, dynamic>> entries) {
+    if (_compareSelection.length != 2) return const SizedBox.shrink();
+
+    final u1 = _compareSelection[0];
+    final u2 = _compareSelection[1];
+
+    final e1 = entries.firstWhere((e) => e["user"] == u1, orElse: () => {});
+    final e2 = entries.firstWhere((e) => e["user"] == u2, orElse: () => {});
+
+    if (e1.isEmpty || e2.isEmpty) return const SizedBox.shrink();
+
+    String labelFor(Map<String, dynamic> e) {
+      return e["display"] as String? ?? e["user"] as String;
+    }
+
+    String metricLabel(Map<String, dynamic> e) {
+      return (e["metric"] as num? ?? 0).toStringAsFixed(0);
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Compare: ${labelFor(e1)} vs ${labelFor(e2)}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _compareColumn(
+                    title: labelFor(e1),
+                    metric: metricLabel(e1),
+                    total: (e1["total"] as num? ?? 0).toStringAsFixed(0),
+                    best: (e1["best"] as num? ?? 0).toStringAsFixed(0),
+                    avg: (e1["avg"] as num? ?? 0).toStringAsFixed(1),
+                    count: e1["count"] as int? ?? 0,
+                    weeklyStreak: _computeWeeklyStreak(u1),
+                    monthlyStreak: _computeMonthlyStreak(u1),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _compareColumn(
+                    title: labelFor(e2),
+                    metric: metricLabel(e2),
+                    total: (e2["total"] as num? ?? 0).toStringAsFixed(0),
+                    best: (e2["best"] as num? ?? 0).toStringAsFixed(0),
+                    avg: (e2["avg"] as num? ?? 0).toStringAsFixed(1),
+                    count: e2["count"] as int? ?? 0,
+                    weeklyStreak: _computeWeeklyStreak(u2),
+                    monthlyStreak: _computeMonthlyStreak(u2),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Tip: long-press another row to change comparison.",
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _compareColumn({
+    required String title,
+    required String metric,
+    required String total,
+    required String best,
+    required String avg,
+    required int count,
+    required int weeklyStreak,
+    required int monthlyStreak,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(
+          "${_cumulativeMode ? "Total in window" : "Best in window"}: $metric",
+        ),
+        Text("Sessions: $count"),
+        Text("Total: $total"),
+        Text("Best: $best"),
+        Text("Avg: $avg"),
+        Text("Weekly streak: ${weeklyStreak}w"),
+        Text("Monthly streak: ${monthlyStreak}m"),
+      ],
+    );
+  }
+
+  Widget _buildStreakCard(String? myUsername) {
+    if (myUsername == null) return const SizedBox.shrink();
+
+    final weekly = _computeWeeklyStreak(myUsername);
+    final monthly = _computeMonthlyStreak(myUsername);
+
+    if (weekly == 0 && monthly == 0) {
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: const Padding(
+          padding: EdgeInsets.all(12),
+          child: Text("No active streaks yet. Time to start one!"),
+        ),
+      );
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.local_fire_department, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Your Streaks",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Weekly streak: ${weekly} week${weekly == 1 ? '' : 's'}",
+                  ),
+                  Text(
+                    "Monthly streak: ${monthly} month${monthly == 1 ? '' : 's'}",
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRisingStarCard() {
+    final star = _computeRisingStar();
+    if (star == null) return const SizedBox.shrink();
+
+    final user = star["user"] as String;
+    final delta = star["delta"] as double;
+    final avgLast = star["avgLast"] as double;
+    final avgPrev = star["avgPrev"] as double;
+    final cLast = star["sessionsLast"] as int;
+    final cPrev = star["sessionsPrev"] as int;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.trending_up, color: Colors.green),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Rising Star (last 30 days)",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "$user has improved their average score by "
+                    "${delta.toStringAsFixed(1)} pts/session.",
+                  ),
+                  Text(
+                    "Prev 30 days: ${avgPrev.toStringAsFixed(1)} over $cPrev session"
+                    "${cPrev == 1 ? '' : 's'}",
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  Text(
+                    "Last 30 days: ${avgLast.toStringAsFixed(1)} over $cLast session"
+                    "${cLast == 1 ? '' : 's'}",
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -657,11 +1230,24 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
 
                 const SizedBox(height: 8),
 
+                // Chart toggle (Top 5 vs My Progress)
+                _chartToggle(),
+
+                const SizedBox(height: 4),
+
                 // You vs Leader
                 _buildYouVsLeaderCard(leaderboard, myUsername),
 
-                // Top-5 chart
-                _buildTop5Chart(leaderboard),
+                // Streaks for current user
+                _buildStreakCard(myUsername),
+
+                // Rising Star (last 30 days)
+                _buildRisingStarCard(),
+
+                // Chart area
+                _showLineChart
+                    ? _buildMyProgressChart(myUsername)
+                    : _buildTop5Chart(leaderboard),
 
                 const SizedBox(height: 4),
                 Align(
@@ -680,6 +1266,9 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                     ),
                   ),
                 ),
+
+                // Comparison card (if 2 users selected)
+                _buildComparisonCard(leaderboard),
               ],
             ),
           ),
@@ -688,13 +1277,16 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           SliverList(
             delegate: SliverChildBuilderDelegate((context, index) {
               final row = leaderboard[index];
+              final username = row["user"] as String;
+              final selected = _compareSelection.contains(username);
 
               return Card(
+                color: selected ? Colors.blue[50] : null,
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
                   leading: _buildRankLeading(index),
                   title: Text(
-                    row["display"] as String? ?? row["user"] as String,
+                    row["display"] as String? ?? username,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
@@ -706,7 +1298,10 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    _openUserSessions(row["user"] as String);
+                    _openUserSessions(username);
+                  },
+                  onLongPress: () {
+                    _toggleCompareUser(username);
                   },
                 ),
               );
