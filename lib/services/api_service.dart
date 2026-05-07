@@ -465,4 +465,35 @@ class ApiService {
     final data = await _getJson(url);
     return data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> updateUserProfile({
+    required String username,
+    String? email,
+    String? displayName,
+    String? town,
+    String? country,
+    String? gender,
+    String? dob,
+    String? bio,
+    bool? shareWithFriends,
+    bool? blackList,
+  }) async {
+    final url = Uri.parse('$baseUrl/users/update');
+
+    final payload = <String, dynamic>{
+      "username": username,
+      if (email != null) "email": email,
+      if (displayName != null) "display_name": displayName,
+      if (town != null) "town": town,
+      if (country != null) "country": country,
+      if (gender != null) "gender": gender,
+      if (dob != null) "dob": dob,
+      if (bio != null) "bio": bio,
+      if (shareWithFriends != null) "shareWithFriends": shareWithFriends,
+      if (blackList != null) "BlackList": blackList,
+    };
+
+    final data = await _postJson(url, payload);
+    return data as Map<String, dynamic>;
+  }
 }

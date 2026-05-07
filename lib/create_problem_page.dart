@@ -197,7 +197,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     // --- WebSocket listener ---
     _wsSub = ProblemUpdaterService.instance.messages.listen((msg) {
       if (!mounted) return;
-      if (msg is Map && msg["type"] == 3) {
+      if (msg["type"] == 3) {
         if (_awaitingSendConfirm) {
           _sendConfirmTimer?.cancel();
           _sendConfirmTimer = null;
@@ -618,8 +618,9 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
     for (final line in lines) {
       final parts = line.split("\t");
-      if (parts.length < 7)
+      if (parts.length < 7) {
         continue; // id + name + grade + comment + setter + stars + holds
+      }
       final existingName = parts[1]; // name is at index 1 now
       final existingHolds = parts.sublist(6); // holds start at index 6
       final existingSet = [...existingHolds]..sort();
@@ -696,13 +697,21 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                         .toList();
 
                     final auth = context.read<AuthState>();
-                    final setter = auth.username ?? "me";
+
+                    final originalSetter =
+                        editingProblem &&
+                            widget.problemRow != null &&
+                            widget.problemRow!.length > 4
+                        ? widget.problemRow![4]
+                        : null;
+
+                    final setter = originalSetter ?? auth.username ?? "me";
                     final fullName = "$name $grade";
 
                     // ---------------- DELETE BRANCH ----------------
                     if (delete) {
                       if (editingProblem && widget.problemRow != null) {
-                        String? oldId = widget.problemRow?[0]?.toString();
+                        String? oldId = widget.problemRow?[0].toString();
 
                         if (oldId == null || oldId.isEmpty) {
                           final problemName = widget.problemRow![1];
@@ -748,10 +757,12 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
                     // ---------------- STARTS / FINISH / INTERMEDIATES ----------------
                     final starts = <String>[];
-                    if (cStart1 != null)
+                    if (cStart1 != null) {
                       starts.add(labelForWs(cStart1!, cols, rows));
-                    if (cStart2 != null)
+                    }
+                    if (cStart2 != null) {
                       starts.add(labelForWs(cStart2!, cols, rows));
+                    }
 
                     final finish = cFinish != null
                         ? labelForWs(cFinish!, cols, rows)
@@ -812,7 +823,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
                     // ---------------- EDITING BRANCH ----------------
                     if (editingProblem && widget.problemRow != null) {
-                      var oldId = widget.problemRow?[0]?.toString();
+                      var oldId = widget.problemRow?[0].toString();
                       if (oldId == null || oldId.isEmpty) {
                         final problemName = widget.problemRow![1];
                         try {
@@ -858,10 +869,9 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              "📝 Draft saved! Drafts can be viewed from the Wall loading screen.",
-                            ),
-                            backgroundColor: Colors.blueAccent,
+                            content: Text("✅ Problem updated"),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 2),
                           ),
                         );
                       }
@@ -869,7 +879,9 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                       // ✅ Return to the Wall Log Page after a tiny delay
                       Future.delayed(const Duration(milliseconds: 300), () {
                         if (!mounted) return;
-                        Navigator.of(context).pop(); // ← Pop CreateProblemPage
+                        Navigator.of(
+                          context,
+                        ).pop(true); // ← Pop CreateProblemPage
                       });
 
                       return;
@@ -941,6 +953,10 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                           duration: const Duration(seconds: 2),
                         ),
                       );
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (!mounted) return;
+                        Navigator.of(context).pop(true);
+                      });
                     }
                   },
             ),
@@ -1044,7 +1060,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                               backgroundColor: Colors.red,
                             ),
                           );
-                          Navigator.pop(context); // close after delete
+                          Navigator.pop(context, true); // close after delete
                         }
                       } catch (e) {
                         debugPrint("⚠️ Delete failed: $e");
@@ -1177,7 +1193,7 @@ class WallPhoto extends StatelessWidget {
                   final sx = (h.x / baseWidth) * constraints.maxWidth;
                   final sy = (h.y / baseHeight) * constraints.maxHeight;
                   // scale radius smoothly between 15 (few cols) and 8 (many cols)
-                  double _scaledRadius(int cols) {
+                  double scaledRadius(int cols) {
                     const minCols = 10; // smallest wall you expect
                     const maxCols = 35; // largest wall you expect
                     const minR = 4.0;
@@ -1194,7 +1210,7 @@ class WallPhoto extends StatelessWidget {
                         t * (maxR - minR); // decreases as cols increase
                   }
 
-                  final double r = _scaledRadius(cols);
+                  final double r = scaledRadius(cols);
                   final double baseCircle = (160.0 / cols).clamp(40.0, 80.0);
 
                   return Positioned(
@@ -1531,7 +1547,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final grades = _allGradesFrom(widget.minGradeNum);
+    final grades = [..._allGradesFrom(widget.minGradeNum), "Project"];
     grade ??= grades.first;
 
     /// ------------------------------
@@ -1548,7 +1564,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
     final bool isCreator = (setter == username);
     final bool isSuper = widget.superusers.contains(username);
 
-    final bool canBenchmark = isCreator || isSuper;
+    final bool canBenchmark = isSuper;
 
     // Debug
     print(
@@ -1599,7 +1615,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: grade,
+                initialValue: grade,
                 items: grades
                     .map((g) => DropdownMenuItem(value: g, child: Text(g)))
                     .toList(),
@@ -1611,7 +1627,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
-                value: stars,
+                initialValue: stars,
                 items: [1, 2, 3]
                     .map((s) => DropdownMenuItem(value: s, child: Text("$s ★")))
                     .toList(),
@@ -1651,79 +1667,112 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
       ),
 
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
+        SizedBox(
+          width: double.infinity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ---------------- TOP ROW ----------------
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancel"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final feetTokens = chosenFeetTokens.entries
+                            .where((e) => e.value)
+                            .map((e) => e.key)
+                            .toList();
 
-        OutlinedButton(
-          onPressed: () {
-            final feetTokens = chosenFeetTokens.entries
-                .where((e) => e.value)
-                .map((e) => e.key)
-                .toList();
-            widget.onSave(
-              nameCtrl.text.trim(),
-              commentCtrl.text.trim(),
-              grade!,
-              stars,
-              feetTokens,
-              draft: true,
-            );
-            Navigator.pop(context);
-          },
-          child: const Text("Save Draft"),
-        ),
+                        widget.onSave(
+                          nameCtrl.text.trim(),
+                          commentCtrl.text.trim(),
+                          grade!,
+                          stars,
+                          feetTokens,
+                          draft: false,
+                        );
 
-        /// ⭐ BENCHMARK BUTTON (Correct Rules)
-        if (widget.editingProblem && canBenchmark)
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
-            onPressed: () {
-              String c = commentCtrl.text.trim();
+                        Navigator.pop(context);
+                      },
+                      child: Text(widget.editingProblem ? "Update" : "Save"),
+                    ),
+                  ),
+                ],
+              ),
 
-              if (c.isEmpty || c == "No Comments") {
-                commentCtrl.text = "Benchmark";
-              } else if (!c.contains("Benchmark")) {
-                commentCtrl.text = "$c\nBenchmark";
-              }
+              if (!widget.editingProblem || canBenchmark) ...[
+                const SizedBox(height: 12),
 
-              final feetTokens = chosenFeetTokens.entries
-                  .where((e) => e.value)
-                  .map((e) => e.key)
-                  .toList();
+                // ---------------- BOTTOM ROW ----------------
+                Row(
+                  children: [
+                    if (!widget.editingProblem)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            final feetTokens = chosenFeetTokens.entries
+                                .where((e) => e.value)
+                                .map((e) => e.key)
+                                .toList();
 
-              widget.onSave(
-                nameCtrl.text.trim(),
-                commentCtrl.text.trim(),
-                grade!,
-                stars,
-                feetTokens,
-                draft: false,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text("Benchmark"),
+                            widget.onSave(
+                              nameCtrl.text.trim(),
+                              commentCtrl.text.trim(),
+                              grade!,
+                              stars,
+                              feetTokens,
+                              draft: true,
+                            );
+
+                            Navigator.pop(context);
+                          },
+                          child: const Text("Save Draft"),
+                        ),
+                      ),
+
+                    if (widget.editingProblem && canBenchmark)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            String c = commentCtrl.text.trim();
+
+                            if (c.isEmpty || c == "No Comments") {
+                              commentCtrl.text = "Benchmark";
+                            } else if (!c.contains("Benchmark")) {
+                              commentCtrl.text = "$c\nBenchmark";
+                            }
+
+                            final feetTokens = chosenFeetTokens.entries
+                                .where((e) => e.value)
+                                .map((e) => e.key)
+                                .toList();
+
+                            widget.onSave(
+                              nameCtrl.text.trim(),
+                              commentCtrl.text.trim(),
+                              grade!,
+                              stars,
+                              feetTokens,
+                              draft: false,
+                            );
+
+                            Navigator.pop(context);
+                          },
+                          child: const Text("Benchmark"),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
           ),
-
-        ElevatedButton(
-          onPressed: () {
-            final feetTokens = chosenFeetTokens.entries
-                .where((e) => e.value)
-                .map((e) => e.key)
-                .toList();
-
-            widget.onSave(
-              nameCtrl.text.trim(),
-              commentCtrl.text.trim(),
-              grade!,
-              stars,
-              feetTokens,
-              draft: false,
-            );
-            Navigator.pop(context);
-          },
-          child: Text(widget.editingProblem ? "Update" : "Save"),
         ),
       ],
     );

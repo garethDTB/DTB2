@@ -12,7 +12,6 @@ import 'auth_state.dart';
 import 'services/api_service.dart';
 import 'providers/problems_provider.dart';
 import 'hold_utils.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
 class LoadProblemsPage extends StatefulWidget {
   final String wallId;
@@ -518,7 +517,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                 _loadDrafts();
               } else {
                 final index = problems.indexOf(problem);
-                await Navigator.push(
+                final changed = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => ProblemDetailPage(
@@ -533,6 +532,17 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                     ),
                   ),
                 );
+
+                if (changed == true && context.mounted) {
+                  final api = context.read<ApiService>();
+                  final auth = context.read<AuthState>();
+
+                  await provider.load(
+                    widget.wallId,
+                    api,
+                    auth.username ?? "guest",
+                  );
+                }
               }
             },
           ),

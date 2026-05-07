@@ -41,7 +41,7 @@ class _WallLogPageState extends State<WallLogPage>
   String? _highlightWall; // nearest wall highlight
   Position? _userPosition;
   bool _locationDenied = false;
-  Map<String, List<String>> _wallSuperusers = {};
+  final Map<String, List<String>> _wallSuperusers = {};
 
   List<Session> _sessions = [];
   bool _loadingSessions = false;
@@ -85,7 +85,7 @@ class _WallLogPageState extends State<WallLogPage>
 
   Widget _nearestWallBanner() {
     final w = _findWall(_highlightWall!);
-    final name = (w?['userName'] ?? _highlightWall!) + " (nearest)";
+    final name = "${w?['userName'] ?? _highlightWall!} (nearest)";
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -200,7 +200,7 @@ class _WallLogPageState extends State<WallLogPage>
       final distMeters = double.tryParse(w['computedDistance'] ?? '') ?? -1;
 
       final distKm = distMeters > 0
-          ? (distMeters / 1000).toStringAsFixed(1) + " km"
+          ? "${(distMeters / 1000).toStringAsFixed(1)} km"
           : "";
 
       // --------------------------------------------------------------
@@ -574,7 +574,7 @@ class _WallLogPageState extends State<WallLogPage>
       if (superuserLine.isEmpty) return [];
       return superuserLine
           .split(",")
-          .map((s) => s.trim().toLowerCase())
+          .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
     } catch (e) {
@@ -640,7 +640,6 @@ class _WallLogPageState extends State<WallLogPage>
     setState(() {
       _wallSuperusers[wall] = superusers;
     });
-    ;
   }
 
   Future<void> _refreshTestFile(String wallId) async {
@@ -683,15 +682,13 @@ class _WallLogPageState extends State<WallLogPage>
       final likesResponse = await api
           .getWallLikes(wallId, username)
           .timeout(const Duration(seconds: 10));
-      if (likesResponse is Map) {
-        final aggregated = (likesResponse['aggregated'] as List? ?? [])
-            .cast<Map<String, dynamic>>();
-        final userLikes = likesResponse['user'] as Map? ?? {};
-        await _prefs?.setString(
-          'likes_$wallId',
-          jsonEncode({"aggregated": aggregated, "user": userLikes}),
-        );
-      }
+      final aggregated = (likesResponse['aggregated'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      final userLikes = likesResponse['user'] as Map? ?? {};
+      await _prefs?.setString(
+        'likes_$wallId',
+        jsonEncode({"aggregated": aggregated, "user": userLikes}),
+      );
     } catch (e) {
       debugPrint("⚠️ Likes error: $e");
     }
@@ -706,12 +703,10 @@ class _WallLogPageState extends State<WallLogPage>
       final rawSessions = await api
           .getSessions(wallId, username)
           .timeout(const Duration(seconds: 10));
-      if (rawSessions is List) {
-        final sessions = rawSessions
-            .map<Session>((s) => Session.fromJson(s))
-            .toList();
-        if (mounted) setState(() => _sessions = sessions);
-      }
+      final sessions = rawSessions
+          .map<Session>((s) => Session.fromJson(s))
+          .toList();
+      if (mounted) setState(() => _sessions = sessions);
     } catch (e) {
       debugPrint("⚠️ Sessions error: $e");
     } finally {
@@ -882,15 +877,31 @@ class _WallLogPageState extends State<WallLogPage>
                             // ✅ Create Problem
                             _menuButton(
                               label: "Create Problem",
-                              onPressed: () {
-                                Navigator.push(
+                              onPressed: () async {
+                                final changed = await Navigator.push<bool>(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => CreateProblemPage(
                                       wallId: selectedWall!,
+                                      superusers:
+                                          _wallSuperusers[selectedWall!] ?? [],
                                     ),
                                   ),
                                 );
+
+                                if (changed == true && mounted) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => LoadProblemsPage(
+                                        wallId: selectedWall!,
+                                        superusers:
+                                            _wallSuperusers[selectedWall!] ??
+                                            [],
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                             ),
                             const SizedBox(height: 16),

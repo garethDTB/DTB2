@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'auth_state.dart';
 import 'services/api_service.dart';
 import 'wall_log_page.dart';
+import 'reset_password_dialog.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,6 +18,206 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordCtrl = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  static const List<String> _genderOptions = ['Male', 'Female', 'Other'];
+
+  static const List<String> _countryOptions = [
+    'United Kingdom',
+    'Afghanistan',
+    'Albania',
+    'Algeria',
+    'Andorra',
+    'Angola',
+    'Antigua and Barbuda',
+    'Argentina',
+    'Armenia',
+    'Australia',
+    'Austria',
+    'Azerbaijan',
+    'Bahamas',
+    'Bahrain',
+    'Bangladesh',
+    'Barbados',
+    'Belarus',
+    'Belgium',
+    'Belize',
+    'Benin',
+    'Bhutan',
+    'Bolivia',
+    'Bosnia and Herzegovina',
+    'Botswana',
+    'Brazil',
+    'Brunei',
+    'Bulgaria',
+    'Burkina Faso',
+    'Burundi',
+    'Cabo Verde',
+    'Cambodia',
+    'Cameroon',
+    'Canada',
+    'Central African Republic',
+    'Chad',
+    'Chile',
+    'China',
+    'Colombia',
+    'Comoros',
+    'Congo',
+    'Costa Rica',
+    'Croatia',
+    'Cuba',
+    'Cyprus',
+    'Czech Republic',
+    'Democratic Republic of the Congo',
+    'Denmark',
+    'Djibouti',
+    'Dominica',
+    'Dominican Republic',
+    'Ecuador',
+    'Egypt',
+    'El Salvador',
+    'Equatorial Guinea',
+    'Eritrea',
+    'Estonia',
+    'Eswatini',
+    'Ethiopia',
+    'Fiji',
+    'Finland',
+    'France',
+    'Gabon',
+    'Gambia',
+    'Georgia',
+    'Germany',
+    'Ghana',
+    'Greece',
+    'Grenada',
+    'Guatemala',
+    'Guinea',
+    'Guinea-Bissau',
+    'Guyana',
+    'Haiti',
+    'Holy See',
+    'Honduras',
+    'Hungary',
+    'Iceland',
+    'India',
+    'Indonesia',
+    'Iran',
+    'Iraq',
+    'Ireland',
+    'Israel',
+    'Italy',
+    'Ivory Coast',
+    'Jamaica',
+    'Japan',
+    'Jordan',
+    'Kazakhstan',
+    'Kenya',
+    'Kiribati',
+    'Kuwait',
+    'Kyrgyzstan',
+    'Laos',
+    'Latvia',
+    'Lebanon',
+    'Lesotho',
+    'Liberia',
+    'Libya',
+    'Liechtenstein',
+    'Lithuania',
+    'Luxembourg',
+    'Madagascar',
+    'Malawi',
+    'Malaysia',
+    'Maldives',
+    'Mali',
+    'Malta',
+    'Marshall Islands',
+    'Mauritania',
+    'Mauritius',
+    'Mexico',
+    'Micronesia',
+    'Moldova',
+    'Monaco',
+    'Mongolia',
+    'Montenegro',
+    'Morocco',
+    'Mozambique',
+    'Myanmar',
+    'Namibia',
+    'Nauru',
+    'Nepal',
+    'Netherlands',
+    'New Zealand',
+    'Nicaragua',
+    'Niger',
+    'Nigeria',
+    'North Korea',
+    'North Macedonia',
+    'Norway',
+    'Oman',
+    'Pakistan',
+    'Palau',
+    'Palestine State',
+    'Panama',
+    'Papua New Guinea',
+    'Paraguay',
+    'Peru',
+    'Philippines',
+    'Poland',
+    'Portugal',
+    'Qatar',
+    'Romania',
+    'Russia',
+    'Rwanda',
+    'Saint Kitts and Nevis',
+    'Saint Lucia',
+    'Saint Vincent and the Grenadines',
+    'Samoa',
+    'San Marino',
+    'Sao Tome and Principe',
+    'Saudi Arabia',
+    'Senegal',
+    'Serbia',
+    'Seychelles',
+    'Sierra Leone',
+    'Singapore',
+    'Slovakia',
+    'Slovenia',
+    'Solomon Islands',
+    'Somalia',
+    'South Africa',
+    'South Korea',
+    'South Sudan',
+    'Spain',
+    'Sri Lanka',
+    'Sudan',
+    'Suriname',
+    'Sweden',
+    'Switzerland',
+    'Syria',
+    'Tajikistan',
+    'Tanzania',
+    'Thailand',
+    'Timor-Leste',
+    'Togo',
+    'Tonga',
+    'Trinidad and Tobago',
+    'Tunisia',
+    'Turkey',
+    'Turkmenistan',
+    'Tuvalu',
+    'Uganda',
+    'Ukraine',
+    'United Arab Emirates',
+    'United States',
+    'Uruguay',
+    'Uzbekistan',
+    'Vanuatu',
+    'Venezuela',
+    'Vietnam',
+    'Yemen',
+    'Zambia',
+    'Zimbabwe',
+  ];
 
   @override
   void dispose() {
@@ -50,6 +251,33 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  DateTime? _parseDob(String value) {
+    try {
+      final parts = value.split('-');
+      if (parts.length != 3) return null;
+
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+
+      final date = DateTime(year, month, day);
+
+      if (date.year == year && date.month == month && date.day == day) {
+        return date;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
   Future<void> _showRegisterDialog(AuthState auth, ApiService api) async {
     final regForm = GlobalKey<FormState>();
     final regUserCtrl = TextEditingController();
@@ -57,337 +285,232 @@ class _LoginPageState extends State<LoginPage> {
     final regPassCtrl = TextEditingController();
     final regConfirmCtrl = TextEditingController();
     final regNameCtrl = TextEditingController();
+    final regTownCtrl = TextEditingController();
+    final regBioCtrl = TextEditingController();
+    final regDobCtrl = TextEditingController();
 
-    final scrollCtrl = ScrollController();
-
-    // Focus nodes for smart focus handling
     final userFocus = FocusNode();
     final emailFocus = FocusNode();
     final passFocus = FocusNode();
     final confirmFocus = FocusNode();
     final nameFocus = FocusNode();
 
-    // Helper to scroll focused field into view
-    void scrollToField(FocusNode node) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!scrollCtrl.hasClients) return;
-        final box = node.context?.findRenderObject() as RenderBox?;
-        if (box != null) {
-          final yPos = box.localToGlobal(Offset.zero).dy;
-          final screenHeight = MediaQuery.of(context).size.height;
-          // if it's too low (covered by keyboard), scroll up
-          if (yPos > screenHeight * 0.5) {
-            scrollCtrl.animateTo(
-              scrollCtrl.offset + 120,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-            );
-          }
-        }
-      });
-    }
-
-    // Attach listeners to focus changes
-    for (var node in [
-      userFocus,
-      emailFocus,
-      passFocus,
-      confirmFocus,
-      nameFocus,
-    ]) {
-      node.addListener(() {
-        if (node.hasFocus) scrollToField(node);
-      });
-    }
+    String? selectedGender;
+    String? selectedCountry;
+    bool shareWithFriends = true;
+    bool blackList = false;
+    bool obscurePass = true;
+    bool obscureConfirm = true;
+    bool isSubmitting = false;
 
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (dialogContext, setDialogState) {
             return AlertDialog(
               insetPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
-                vertical: 20,
+                vertical: 24,
               ),
               title: const Text("Register"),
-              content: LayoutBuilder(
-                builder: (context, constraints) {
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.8,
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).viewInsets.bottom,
-                      ),
-                      child: Scrollbar(
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          controller: scrollCtrl,
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          child: Form(
-                            key: regForm,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                TextFormField(
-                                  controller: regUserCtrl,
-                                  focusNode: userFocus,
-                                  decoration: const InputDecoration(
-                                    labelText: "Username",
-                                  ),
-                                  textInputAction: TextInputAction.next,
-                                  validator: (v) => v == null || v.isEmpty
-                                      ? "Enter a username"
-                                      : null,
-                                  onFieldSubmitted: (_) =>
-                                      emailFocus.requestFocus(),
-                                ),
-                                TextFormField(
-                                  controller: regEmailCtrl,
-                                  focusNode: emailFocus,
-                                  decoration: const InputDecoration(
-                                    labelText: "Email",
-                                  ),
-                                  keyboardType: TextInputType.emailAddress,
-                                  textInputAction: TextInputAction.next,
-                                  validator: (v) => v == null || v.isEmpty
-                                      ? "Enter an email"
-                                      : null,
-                                  onFieldSubmitted: (_) =>
-                                      passFocus.requestFocus(),
-                                ),
-                                TextFormField(
-                                  controller: regPassCtrl,
-                                  focusNode: passFocus,
-                                  decoration: const InputDecoration(
-                                    labelText: "Password",
-                                  ),
-                                  obscureText: true,
-                                  textInputAction: TextInputAction.next,
-                                  validator: (v) => v == null || v.isEmpty
-                                      ? "Enter a password"
-                                      : null,
-                                  onFieldSubmitted: (_) =>
-                                      confirmFocus.requestFocus(),
-                                ),
-                                TextFormField(
-                                  controller: regConfirmCtrl,
-                                  focusNode: confirmFocus,
-                                  decoration: const InputDecoration(
-                                    labelText: "Confirm Password",
-                                  ),
-                                  obscureText: true,
-                                  textInputAction: TextInputAction.next,
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty) {
-                                      return "Confirm your password";
-                                    }
-                                    if (v != regPassCtrl.text) {
-                                      return "Passwords do not match";
-                                    }
-                                    return null;
-                                  },
-                                  onFieldSubmitted: (_) =>
-                                      nameFocus.requestFocus(),
-                                ),
-                                TextFormField(
-                                  controller: regNameCtrl,
-                                  focusNode: nameFocus,
-                                  decoration: const InputDecoration(
-                                    labelText: "Real Name",
-                                  ),
-                                  textInputAction: TextInputAction.done,
-                                ),
-                                const SizedBox(height: 12),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              actions: [
-                TextButton(
-                  child: const Text("Cancel"),
-                  onPressed: () => Navigator.pop(context),
+              content: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(dialogContext).viewInsets.bottom,
                 ),
-                ElevatedButton(
-                  child: const Text("Register"),
-                  onPressed: () async {
-                    if (!(regForm.currentState?.validate() ?? false)) {
-                      await Future.delayed(const Duration(milliseconds: 100));
-
-                      if (regUserCtrl.text.isEmpty) {
-                        userFocus.requestFocus();
-                      } else if (regEmailCtrl.text.isEmpty) {
-                        emailFocus.requestFocus();
-                      } else if (regPassCtrl.text.isEmpty) {
-                        passFocus.requestFocus();
-                      } else if (regConfirmCtrl.text != regPassCtrl.text) {
-                        confirmFocus.requestFocus();
-                      } else {
-                        nameFocus.requestFocus();
-                      }
-                      return;
-                    }
-
-                    try {
-                      final ok = await auth.register(
-                        api,
-                        regUserCtrl.text.trim(),
-                        regEmailCtrl.text.trim(),
-                        regPassCtrl.text.trim(),
-                        displayName: regNameCtrl.text.trim().isEmpty
-                            ? null
-                            : regNameCtrl.text.trim(),
-                      );
-                      Navigator.pop(context);
-                      if (ok) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              "Registration successful. Please log in.",
-                            ),
+                child: SizedBox(
+                  width: double.maxFinite,
+                  child: Form(
+                    key: regForm,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: regUserCtrl,
+                          focusNode: userFocus,
+                          decoration: const InputDecoration(
+                            labelText: "Username",
                           ),
-                        );
-                      }
-                    } catch (e) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            e.toString().replaceAll("Exception: ", ""),
-                          ),
+                          textInputAction: TextInputAction.next,
+                          validator: (v) => v == null || v.trim().isEmpty
+                              ? "Enter a username"
+                              : null,
+                          onFieldSubmitted: (_) => emailFocus.requestFocus(),
                         ),
-                      );
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: regEmailCtrl,
+                          focusNode: emailFocus,
+                          decoration: const InputDecoration(labelText: "Email"),
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          validator: (v) {
+                            final value = v?.trim() ?? '';
+                            if (value.isEmpty) return "Enter an email";
 
-    // Cleanup
-    for (var node in [
-      userFocus,
-      emailFocus,
-      passFocus,
-      confirmFocus,
-      nameFocus,
-    ]) {
-      node.dispose();
-    }
-  }
-
-  Future<void> _showResetDialog(AuthState auth, ApiService api) async {
-    final resetForm = GlobalKey<FormState>();
-    final resetUserCtrl = TextEditingController();
-    final resetEmailCtrl = TextEditingController();
-    final resetPassCtrl = TextEditingController();
-    final resetConfirmCtrl = TextEditingController();
-    bool obscurePass = true;
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text("Reset Password"),
-              content: Form(
-                key: resetForm,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: resetUserCtrl,
-                      decoration: const InputDecoration(labelText: "Username"),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? "Enter your username" : null,
-                    ),
-                    TextFormField(
-                      controller: resetEmailCtrl,
-                      decoration: const InputDecoration(labelText: "Email"),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? "Enter your email" : null,
-                    ),
-                    TextFormField(
-                      controller: resetPassCtrl,
-                      decoration: InputDecoration(
-                        labelText: "New Password",
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscurePass
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscurePass = !obscurePass;
-                            });
+                            final emailRegex = RegExp(
+                              r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                            );
+                            if (!emailRegex.hasMatch(value)) {
+                              return "Enter a valid email";
+                            }
+                            return null;
                           },
+                          onFieldSubmitted: (_) => passFocus.requestFocus(),
                         ),
-                      ),
-                      obscureText: obscurePass,
-                      validator: (v) => v == null || v.isEmpty
-                          ? "Enter a new password"
-                          : null,
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: regPassCtrl,
+                          focusNode: passFocus,
+                          decoration: InputDecoration(
+                            labelText: "Password",
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscurePass
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  obscurePass = !obscurePass;
+                                });
+                              },
+                            ),
+                          ),
+                          obscureText: obscurePass,
+                          textInputAction: TextInputAction.next,
+                          validator: (v) => v == null || v.isEmpty
+                              ? "Enter a password"
+                              : null,
+                          onFieldSubmitted: (_) => confirmFocus.requestFocus(),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: regConfirmCtrl,
+                          focusNode: confirmFocus,
+                          decoration: InputDecoration(
+                            labelText: "Confirm Password",
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureConfirm
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  obscureConfirm = !obscureConfirm;
+                                });
+                              },
+                            ),
+                          ),
+                          obscureText: obscureConfirm,
+                          textInputAction: TextInputAction.next,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) {
+                              return "Confirm your password";
+                            }
+                            if (v != regPassCtrl.text) {
+                              return "Passwords do not match";
+                            }
+                            return null;
+                          },
+                          onFieldSubmitted: (_) => nameFocus.requestFocus(),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: regNameCtrl,
+                          focusNode: nameFocus,
+                          decoration: const InputDecoration(
+                            labelText: "Real Name",
+                          ),
+                          textInputAction: TextInputAction.done,
+                        ),
+                      ],
                     ),
-                    TextFormField(
-                      controller: resetConfirmCtrl,
-                      decoration: const InputDecoration(
-                        labelText: "Confirm Password",
-                      ),
-                      obscureText: obscurePass,
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return "Confirm your password";
-                        }
-                        if (v != resetPassCtrl.text) {
-                          return "Passwords do not match";
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
+                  ),
                 ),
               ),
               actions: [
                 TextButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () => Navigator.pop(dialogContext),
                   child: const Text("Cancel"),
-                  onPressed: () => Navigator.pop(context),
                 ),
                 ElevatedButton(
-                  child: const Text("Reset"),
-                  onPressed: () async {
-                    if (resetForm.currentState?.validate() ?? false) {
-                      final ok = await auth.resetPassword(
-                        api,
-                        resetUserCtrl.text.trim(),
-                        resetEmailCtrl.text.trim(),
-                        resetPassCtrl.text.trim(),
-                      );
-                      Navigator.pop(context);
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!(regForm.currentState?.validate() ?? false)) {
+                            if (regUserCtrl.text.trim().isEmpty) {
+                              userFocus.requestFocus();
+                            } else if (regEmailCtrl.text.trim().isEmpty) {
+                              emailFocus.requestFocus();
+                            } else if (regPassCtrl.text.isEmpty) {
+                              passFocus.requestFocus();
+                            } else if (regConfirmCtrl.text !=
+                                regPassCtrl.text) {
+                              confirmFocus.requestFocus();
+                            } else {
+                              nameFocus.requestFocus();
+                            }
+                            return;
+                          }
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            ok
-                                ? "Password reset successfully"
-                                : "No email was registered with this account please contact DTB",
-                          ),
-                        ),
-                      );
-                    }
-                  },
+                          setDialogState(() {
+                            isSubmitting = true;
+                          });
+
+                          try {
+                            final ok = await auth.register(
+                              api,
+                              regUserCtrl.text.trim(),
+                              regEmailCtrl.text.trim(),
+                              regPassCtrl.text.trim(),
+                              displayName: regNameCtrl.text.trim().isEmpty
+                                  ? null
+                                  : regNameCtrl.text.trim(),
+                              town: regTownCtrl.text.trim(),
+                              country: selectedCountry,
+                              gender: selectedGender,
+                              dob: regDobCtrl.text.trim(),
+                              bio: regBioCtrl.text.trim(),
+                              shareWithFriends: shareWithFriends,
+                              blackList: blackList,
+                            );
+
+                            if (!mounted) return;
+                            Navigator.pop(dialogContext);
+
+                            if (ok) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Registration successful. Please log in.",
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (!mounted) return;
+                            Navigator.pop(dialogContext);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  e.toString().replaceAll("Exception: ", ""),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text("Register"),
                 ),
               ],
             );
@@ -395,6 +518,20 @@ class _LoginPageState extends State<LoginPage> {
         );
       },
     );
+
+    // userFocus.dispose();
+    // emailFocus.dispose();
+    // passFocus.dispose();
+    // confirmFocus.dispose();
+    // nameFocus.dispose();
+    // regUserCtrl.dispose();
+    // regEmailCtrl.dispose();
+    // regPassCtrl.dispose();
+    // regConfirmCtrl.dispose();
+    // regNameCtrl.dispose();
+    // regTownCtrl.dispose();
+    // regBioCtrl.dispose();
+    // regDobCtrl.dispose();
   }
 
   @override
@@ -472,19 +609,38 @@ class _LoginPageState extends State<LoginPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     TextButton(
+                      onPressed: () async {
+                        final ok = await showResetPasswordDialog(
+                          context,
+                          auth,
+                          api,
+                        );
+
+                        if (!mounted || ok == null) return;
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+
+                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? "Password reset successfully"
+                                    : "No email was registered with this account please contact DTB",
+                              ),
+                            ),
+                          );
+                        });
+                      },
+                      child: const Text("Reset Password"),
+                    ),
+                    TextButton(
                       onPressed: () => _showRegisterDialog(auth, api),
                       child: const Text("Register"),
                     ),
-                    TextButton(
-                      onPressed: () => _showResetDialog(auth, api),
-                      child: const Text("Reset Password"),
-                    ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
-
-                // 👇 New Guest Access Button
                 TextButton.icon(
                   icon: const Icon(Icons.person_outline),
                   label: const Text("Continue as Guest"),

@@ -39,10 +39,13 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthState()..tryAutoLogin()),
         ChangeNotifierProvider(create: (_) => AppState()),
+        // Provider<ApiService>(
+        //   create: (_) => ApiService(
+        //     "https://dtb2-func-hkhagfe5gkfaa0g9.ukwest-01.azurewebsites.net/api",
+        //   ),
+        // ),
         Provider<ApiService>(
-          create: (_) => ApiService(
-            "https://dtb2-func-hkhagfe5gkfaa0g9.ukwest-01.azurewebsites.net/api",
-          ),
+          create: (_) => ApiService("http://192.168.68.101:7071/api"),
         ),
         ChangeNotifierProvider(create: (_) => ProblemsProvider()),
       ],
@@ -128,6 +131,7 @@ class _ClimbLightAppState extends State<ClimbLightApp>
               isEditing: extra?['isEditing'] ?? false,
               problemRow: (extra?['problemRow'] as List?)?.cast<String>(),
               draftRow: (extra?['draftRow'] as List?)?.cast<String>(),
+              superusers: List<String>.from(extra?["superusers"] ?? const []),
             );
           },
         ),
@@ -150,7 +154,7 @@ class _ClimbLightAppState extends State<ClimbLightApp>
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(
-            textScaleFactor: mq.textScaleFactor.clamp(1.0, 1.3),
+            textScaler: TextScaler.linear(mq.textScaleFactor.clamp(1.0, 1.3)),
           ),
           child: child!,
         );

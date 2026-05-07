@@ -45,7 +45,7 @@ class ProblemUpdaterService {
 
       // Step 3: Send handshake
       final handshake =
-          jsonEncode({"protocol": "json", "version": 1}) + "\u001e";
+          "${jsonEncode({"protocol": "json", "version": 1})}\u001e";
       _channel!.sink.add(handshake);
       print("🤝 Sent handshake: $handshake");
 
@@ -104,7 +104,7 @@ class ProblemUpdaterService {
       "arguments": [user, problemName, mirrored, board],
     };
 
-    final payload = jsonEncode(msg) + "\u001e"; // SignalR frame
+    final payload = "${jsonEncode(msg)}\u001e"; // SignalR frame
     _channel!.sink.add(payload);
     print("📤 Sent UpdateProblem: $payload");
   }

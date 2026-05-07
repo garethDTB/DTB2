@@ -720,7 +720,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: grade,
+              initialValue: grade,
               items: grades
                   .map((g) => DropdownMenuItem(value: g, child: Text(g)))
                   .toList(),
@@ -729,7 +729,7 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<int>(
-              value: stars,
+              initialValue: stars,
               items: [1, 2, 3]
                   .map((s) => DropdownMenuItem(value: s, child: Text("$s ★")))
                   .toList(),

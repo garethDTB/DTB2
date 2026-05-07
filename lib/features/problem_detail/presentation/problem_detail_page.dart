@@ -68,7 +68,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
   int _rows = 20;
 
   String gradeMode = "french";
-  Map<String, int> _attemptCounts = {};
+  final Map<String, int> _attemptCounts = {};
 
   bool _likedByUser = false;
   int _likesCount = 0;
@@ -102,7 +102,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
 
     _wsSub = ProblemUpdaterService.instance.messages.listen((msg) {
       if (!mounted) return;
-      if (msg is Map && msg["type"] == 3) {
+      if (msg["type"] == 3) {
         _updateSwipeMessage("Displayed now", Colors.green, clearAfter: 2);
       }
     });
@@ -775,12 +775,12 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
 
     final attemptCount = _attemptCounts[rawName] ?? 0;
     final auth = context.watch<AuthState>();
-    final username = (auth.username ?? "").toLowerCase();
-    final setter = (problem['setter'] ?? "").toString().toLowerCase();
+    final username = (auth.username ?? "").trim();
+    final setter = (problem['setter'] ?? "").toString().trim();
+
     final canEdit =
         username.isNotEmpty &&
-        (username == setter ||
-            widget.superusers.map((s) => s.toLowerCase()).contains(username));
+        (username == setter || widget.superusers.contains(username));
 
     // ✅ Return main layout
     return WillPopScope(
@@ -798,7 +798,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
 
               if (footSubtitle != null)
                 Text(
-                  footSubtitle!,
+                  footSubtitle,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
@@ -844,7 +844,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
             if (canEdit)
               IconButton(
                 icon: const Icon(Icons.edit),
-                onPressed: () {
+                onPressed: () async {
                   final row = [
                     problem['id'] ?? '',
                     problem['name'] ?? '',
@@ -854,7 +854,8 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                     (problem['stars'] ?? '1').toString(),
                     ...(problem['holds'] as List).map((h) => h.toString()),
                   ];
-                  context.push(
+
+                  final changed = await context.push<bool>(
                     "/create",
                     extra: {
                       "isEditing": true,
@@ -865,6 +866,10 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                       "superusers": widget.superusers,
                     },
                   );
+
+                  if (changed == true && mounted) {
+                    Navigator.pop(context, true);
+                  }
                 },
               ),
           ],

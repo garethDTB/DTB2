@@ -1109,11 +1109,9 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
+                  Text("Weekly streak: $weekly week${weekly == 1 ? '' : 's'}"),
                   Text(
-                    "Weekly streak: ${weekly} week${weekly == 1 ? '' : 's'}",
-                  ),
-                  Text(
-                    "Monthly streak: ${monthly} month${monthly == 1 ? '' : 's'}",
+                    "Monthly streak: $monthly month${monthly == 1 ? '' : 's'}",
                   ),
                 ],
               ),
