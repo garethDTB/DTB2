@@ -41,6 +41,23 @@ class ApiService {
   Future<SharedPreferences> get _prefs async =>
       await SharedPreferences.getInstance();
 
+  Future<dynamic> _putJson(Uri url, Map<String, dynamic> payload) async {
+    final response = await http.put(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(payload),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(
+        'PUT failed [${response.statusCode}] for $url\nPayload: $payload\n${response.body}',
+      );
+    }
+
+    if (response.body.isEmpty) return {};
+    return json.decode(response.body);
+  }
+
   /// ------------------------------
   /// TICKS
   /// ------------------------------
@@ -495,5 +512,90 @@ class ApiService {
 
     final data = await _postJson(url, payload);
     return data as Map<String, dynamic>;
+  }
+
+  /// ------------------------------
+  /// LISTS
+  /// ------------------------------
+  Future<List<Map<String, dynamic>>> getPublicLists(String wallId) async {
+    final url = Uri.parse('$baseUrl/walls/$wallId/lists');
+    final data = await _getJson(url);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getMyLists(
+    String wallId,
+    String username,
+  ) async {
+    final url = Uri.parse(
+      '$baseUrl/walls/$wallId/lists?user=${Uri.encodeComponent(username)}&mine=true',
+    );
+    final data = await _getJson(url);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createList({
+    required String wallId,
+    required String username,
+    required String displayName,
+    required String title,
+    String description = '',
+    bool isPublic = true,
+    List<Map<String, dynamic>> problems = const [],
+  }) async {
+    final url = Uri.parse('$baseUrl/walls/$wallId/lists');
+
+    final payload = {
+      "Users": username,
+      "DisplayName": displayName,
+      "Title": title,
+      "Description": description,
+      "IsPublic": isPublic,
+      "Problems": problems,
+    };
+
+    final data = await _postJson(url, payload);
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateList({
+    required String wallId,
+    required String listId,
+    required String username,
+    required String title,
+    required String description,
+    required bool isPublic,
+    required List<Map<String, dynamic>> problems,
+  }) async {
+    final url = Uri.parse('$baseUrl/walls/$wallId/lists/$listId');
+
+    final payload = {
+      "Users": username,
+      "Title": title,
+      "Description": description,
+      "IsPublic": isPublic,
+      "Problems": problems,
+    };
+
+    final data = await _putJson(url, payload);
+    return data as Map<String, dynamic>;
+  }
+
+  Future<void> deleteList({
+    required String wallId,
+    required String listId,
+    required String username,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/walls/$wallId/lists/$listId?user=${Uri.encodeComponent(username)}',
+    );
+
+    final resp = await http.delete(url);
+
+    if (resp.statusCode != 200 && resp.statusCode != 204) {
+      throw Exception(
+        'DELETE list failed [${resp.statusCode}] for $url\n${resp.body}',
+      );
+    }
   }
 }

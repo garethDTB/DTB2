@@ -681,15 +681,153 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     );
   }
 
+  Future<void> _showAddToListDialog() async {
+    final api = context.read<ApiService>();
+    final auth = context.read<AuthState>();
+
+    final username = (auth.username ?? '').trim();
+
+    if (username.isEmpty || username == "guest") {
+      _updateSwipeMessage(
+        "Log in to add climbs to lists",
+        Colors.orange,
+        clearAfter: 2,
+      );
+      return;
+    }
+
+    try {
+      final myLists = await api.getMyLists(widget.wallId, username);
+
+      if (!mounted) return;
+
+      if (myLists.isEmpty) {
+        _updateSwipeMessage(
+          "Create a list first",
+          Colors.orange,
+          clearAfter: 2,
+        );
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        builder: (sheetContext) {
+          return SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    "Add climb to list",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ...myLists.map((list) {
+                  final count = (list['Problems'] as List? ?? []).length;
+
+                  return ListTile(
+                    leading: const Icon(Icons.list),
+                    title: Text(list['Title'] ?? 'Untitled list'),
+                    subtitle: Text('$count climbs'),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _addCurrentProblemToList(list);
+                    },
+                  );
+                }),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint("❌ Failed to load my lists: $e");
+      _updateSwipeMessage("Failed to load lists", Colors.red, clearAfter: 2);
+    }
+  }
+
+  Future<void> _addCurrentProblemToList(Map<String, dynamic> list) async {
+    final api = context.read<ApiService>();
+    final auth = context.read<AuthState>();
+
+    final username = (auth.username ?? '').trim();
+    final problem = widget.problems[currentIndex];
+
+    final existingProblems = List<Map<String, dynamic>>.from(
+      (list['Problems'] as List? ?? []).map(
+        (p) => Map<String, dynamic>.from(p),
+      ),
+    );
+
+    final currentProblemId = (problem['id'] ?? '').toString();
+    final currentProblemName = (problem['name'] ?? '').toString();
+    final currentGrade = (problem['grade'] ?? '').toString();
+
+    final alreadyExists = existingProblems.any((p) {
+      final existingId = (p['ProblemId'] ?? '').toString();
+      final existingName = (p['Problem'] ?? '').toString();
+
+      final sameId =
+          currentProblemId.isNotEmpty &&
+          existingId.isNotEmpty &&
+          existingId == currentProblemId;
+
+      final sameName =
+          currentProblemName.isNotEmpty &&
+          existingName.isNotEmpty &&
+          existingName == currentProblemName;
+
+      return sameId || sameName;
+    });
+
+    if (alreadyExists) {
+      _updateSwipeMessage("Already in this list", Colors.orange, clearAfter: 2);
+      return;
+    }
+
+    existingProblems.add({
+      "ProblemId": currentProblemId,
+      "Problem": currentProblemName,
+      "Grade": currentGrade,
+      "Order": existingProblems.length + 1,
+      "Note": "",
+    });
+
+    try {
+      await api.updateList(
+        wallId: widget.wallId,
+        listId: list['id'],
+        username: username,
+        title: list['Title'] ?? '',
+        description: list['Description'] ?? '',
+        isPublic: list['IsPublic'] ?? true,
+        problems: existingProblems,
+      );
+
+      _updateSwipeMessage(
+        "Added to ${list['Title']}",
+        Colors.green,
+        clearAfter: 2,
+      );
+      HapticFeedback.selectionClick();
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      debugPrint("❌ Failed to add problem to list: $e");
+      _updateSwipeMessage("Failed to add to list", Colors.red, clearAfter: 2);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ Access provider
     final provider = context.watch<ProblemsProvider>();
 
     // ✅ Pick which list to use (filtered or all)
-    final problems = provider.filteredProblems.isNotEmpty
-        ? provider.filteredProblems
-        : provider.allProblems;
+    final problems = widget.problems;
 
     // 🧭 Debugging info
     debugPrint('🧩 BUILDING ProblemDetailPage ----------------------');
@@ -841,6 +979,12 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
           ),
 
           actions: [
+            IconButton(
+              icon: const Icon(Icons.playlist_add),
+              tooltip: "Add to list",
+              onPressed: _showAddToListDialog,
+            ),
+
             if (canEdit)
               IconButton(
                 icon: const Icon(Icons.edit),
