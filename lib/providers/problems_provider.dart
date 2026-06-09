@@ -11,6 +11,16 @@ import '../hold_utils.dart';
 
 enum ProblemFilterType { none, liked, attempted, ticked, notTicked, benchmarks }
 
+enum ProblemSortType {
+  grade,
+  newest,
+  oldest,
+  mostAscents,
+  leastAscents,
+  mostLikes,
+  leastLikes,
+}
+
 class ProblemsProvider extends ChangeNotifier {
   List<Map<String, dynamic>> allProblems = [];
   List<Map<String, dynamic>> filteredProblems = [];
@@ -18,8 +28,10 @@ class ProblemsProvider extends ChangeNotifier {
   Set<String> attemptedProblems = {}; // 🔴 Attempts (today + past)
   Set<String> tickedProblemsPast = {}; // 🟣 Past ticks
   Set<String> tickedProblemsToday = {}; // 🟢 Today’s ticks
-
+  String? selectedMinGrade;
+  String? selectedMaxGrade;
   String gradeMode = "french";
+  ProblemSortType selectedSort = ProblemSortType.grade;
   String? selectedGrade;
 
   int numCols = 0;
@@ -30,6 +42,7 @@ class ProblemsProvider extends ChangeNotifier {
 
   Future<void> load(String wallId, ApiService api, String user) async {
     isLoading = true;
+    hasLoaded = false; // <-- add this
     notifyListeners();
 
     // ✅ Reset all state before loading new wall
@@ -86,7 +99,10 @@ class ProblemsProvider extends ChangeNotifier {
       "📥 ProblemsProvider: got ${rawProblems.length} problems for wall $wallId",
     );
 
+    int index = 0;
+
     allProblems = rawProblems.map<Map<String, dynamic>>((item) {
+      final orderIndex = index++;
       final holds = <Map<String, String>>[
         ...(item['StartHolds'] ?? []).map(
           (h) => {'type': 'start', 'label': h.toString()},
@@ -108,6 +124,7 @@ class ProblemsProvider extends ChangeNotifier {
         'ticks': 0,
         'likesCount': 0,
         'likedByUser': false,
+        'orderIndex': orderIndex,
       };
     }).toList();
 
@@ -235,6 +252,40 @@ class ProblemsProvider extends ChangeNotifier {
     numRows = int.tryParse(lines[1]) ?? 0;
   }
 
+  void _sortFilteredProblems() {
+    filteredProblems.sort((a, b) {
+      switch (selectedSort) {
+        case ProblemSortType.newest:
+          return (b['orderIndex'] ?? 0).compareTo(a['orderIndex'] ?? 0);
+
+        case ProblemSortType.oldest:
+          return (a['orderIndex'] ?? 0).compareTo(b['orderIndex'] ?? 0);
+
+        case ProblemSortType.mostAscents:
+          return (b['ticks'] ?? 0).compareTo(a['ticks'] ?? 0);
+
+        case ProblemSortType.leastAscents:
+          return (a['ticks'] ?? 0).compareTo(b['ticks'] ?? 0);
+
+        case ProblemSortType.mostLikes:
+          return (b['likesCount'] ?? 0).compareTo(a['likesCount'] ?? 0);
+
+        case ProblemSortType.leastLikes:
+          return (a['likesCount'] ?? 0).compareTo(b['likesCount'] ?? 0);
+
+        case ProblemSortType.grade:
+          final gA = a['grade'] ?? '';
+          final gB = b['grade'] ?? '';
+          final cmp = gradeSort(gA, gB);
+          if (cmp != 0) return cmp;
+
+          final popA = (a['ticks'] ?? 0) + (a['likesCount'] ?? 0);
+          final popB = (b['ticks'] ?? 0) + (b['likesCount'] ?? 0);
+          return popB.compareTo(popA);
+      }
+    });
+  }
+
   void filterProblems(
     String query,
     String? grade, {
@@ -255,8 +306,18 @@ class ProblemsProvider extends ChangeNotifier {
               false) ||
           (problem['comment']?.toLowerCase().contains(q) ?? false);
 
-      final matchesGrade =
-          grade == null || grade.isEmpty || problem['grade'] == grade;
+      bool matchesGrade = true;
+
+      if (selectedMinGrade != null && selectedMaxGrade != null) {
+        final problemGrade = problem['grade'] ?? '';
+
+        matchesGrade =
+            gradeSort(problemGrade, selectedMinGrade!) >= 0 &&
+            gradeSort(problemGrade, selectedMaxGrade!) <= 0;
+      } else {
+        matchesGrade =
+            grade == null || grade.isEmpty || problem['grade'] == grade;
+      }
 
       final rawName = (problem['name'] as String? ?? '').trim();
 
@@ -280,16 +341,7 @@ class ProblemsProvider extends ChangeNotifier {
       return matchesQuery && matchesGrade && matchesExtra;
     }).toList();
 
-    filteredProblems.sort((a, b) {
-      final gA = a['grade'] ?? '';
-      final gB = b['grade'] ?? '';
-      final cmp = gradeSort(gA, gB);
-      if (cmp != 0) return cmp;
-
-      final popA = (a['ticks'] ?? 0) + (a['likesCount'] ?? 0);
-      final popB = (b['ticks'] ?? 0) + (b['likesCount'] ?? 0);
-      return popB.compareTo(popA);
-    });
+    _sortFilteredProblems();
 
     notifyListeners();
   }

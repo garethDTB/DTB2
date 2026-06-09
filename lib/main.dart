@@ -45,8 +45,11 @@ void main() async {
         //   ),
         // ),
         Provider<ApiService>(
-          create: (_) => ApiService("http://192.168.68.101:7071/api"),
+          create: (_) => ApiService(
+            "https://dtb2-func-v2-dqbbhed6cpcwgmg8.ukwest-01.azurewebsites.net/api",
+          ),
         ),
+
         ChangeNotifierProvider(create: (_) => ProblemsProvider()),
       ],
       child: const ClimbLightApp(),

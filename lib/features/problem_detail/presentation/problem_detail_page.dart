@@ -23,6 +23,7 @@ import 'widgets/wall_view.dart';
 import 'widgets/action_buttons_row.dart';
 import 'widgets/swipe_hint_arrow.dart';
 import 'widgets/legend_bar.dart';
+import '../../../beta_videos_page.dart';
 
 bool _mirrorAvailable = false;
 bool _tickerVisible = true;
@@ -984,7 +985,33 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
               tooltip: "Add to list",
               onPressed: _showAddToListDialog,
             ),
+            IconButton(
+              icon: const Icon(Icons.video_library),
+              tooltip: "Beta videos",
+              onPressed: () {
+                final problemName = (problem['name'] ?? '').toString();
+                final grade = (problem['grade'] ?? '').toString();
+                final setter = (problem['setter'] ?? '').toString();
 
+                final problemId =
+                    (problem['id'] ?? problem['Id'] ?? problem['ID'] ?? '')
+                        .toString();
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BetaVideosPage(
+                      problemId: problemName,
+                      problemName: problemName,
+                      grade: grade,
+                      wallName: widget.wallId,
+                      angle: '',
+                      setter: setter,
+                    ),
+                  ),
+                );
+              },
+            ),
             if (canEdit)
               IconButton(
                 icon: const Icon(Icons.edit),

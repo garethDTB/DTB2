@@ -31,7 +31,8 @@ class LoadProblemsPage extends StatefulWidget {
 class _LoadProblemsPageState extends State<LoadProblemsPage> {
   TextEditingController searchController = TextEditingController();
   ProblemFilterType activeFilter = ProblemFilterType.none;
-
+  String? rangeStartGrade;
+  String? rangeEndGrade;
   List<Map<String, dynamic>> _draftProblems = [];
   bool _loadingDrafts = false;
   String? wallDisplayName;
@@ -66,7 +67,9 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete list?"),
-        content: Text("Delete '${list['Title'] ?? 'Untitled list'}'?"),
+        content: Text(
+          "Delete '${list['Title'] ?? 'Untitled list'}'?\n\nThis cannot be undone.",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -273,7 +276,24 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       }
     } else {
       if (provider.isLoading && !provider.hasLoaded) {
-        body = const Center(child: CircularProgressIndicator());
+        body = const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                "Preparing board...",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Loading climbs and statistics",
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
       } else if (provider.filteredProblems.isEmpty) {
         body = const Center(child: Text("No problems yet for this wall"));
       } else {
@@ -287,6 +307,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
             setState(() {
               activeFilter = ProblemFilterType.none;
               provider.selectedGrade = null;
+              provider.selectedSort = ProblemSortType.grade;
               searchController.clear();
             });
             provider.filterProblems(
@@ -307,7 +328,10 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
 
     final filtersActive =
         activeFilter != ProblemFilterType.none ||
-        (!widget.isDraftMode && provider.selectedGrade != null);
+        (!widget.isDraftMode && provider.selectedGrade != null) ||
+        provider.selectedMinGrade != null ||
+        provider.selectedMaxGrade != null ||
+        provider.selectedSort != ProblemSortType.grade;
 
     return Scaffold(
       appBar: AppBar(
@@ -394,6 +418,10 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                           value: null,
                           child: Text("All grades"),
                         ),
+                        const DropdownMenuItem<String?>(
+                          value: "__range__",
+                          child: Text("Grade range..."),
+                        ),
                         ...availableGrades.map(
                           (grade) => DropdownMenuItem<String?>(
                             value: grade,
@@ -405,8 +433,20 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        provider.selectedGrade = value;
+                      onChanged: (value) async {
+                        if (value == "__range__") {
+                          await _showGradeRangeMenu(provider, availableGrades);
+                          return;
+                        }
+
+                        setState(() {
+                          provider.selectedGrade = value;
+                          provider.selectedMinGrade = null;
+                          provider.selectedMaxGrade = null;
+                          rangeStartGrade = null;
+                          rangeEndGrade = null;
+                        });
+
                         provider.filterProblems(
                           searchController.text,
                           provider.selectedGrade,
@@ -415,6 +455,27 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                       },
                     ),
                     const SizedBox(width: 12),
+                    Tooltip(
+                      message: "Sort",
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => _showSortMenu(provider, availableGrades),
+                        child: CircleAvatar(
+                          backgroundColor:
+                              provider.selectedSort == ProblemSortType.grade
+                              ? Colors.grey[200]
+                              : Colors.blue.withOpacity(0.2),
+                          child: Icon(
+                            Icons.swap_vert,
+                            color:
+                                provider.selectedSort == ProblemSortType.grade
+                                ? Colors.black54
+                                : Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     _filterIcon(
                       provider,
                       tooltip: "Liked",
@@ -485,9 +546,19 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                         onTap: () {
                           setState(() {
                             activeFilter = ProblemFilterType.none;
+
                             provider.selectedGrade = null;
+                            provider.selectedMinGrade = null;
+                            provider.selectedMaxGrade = null;
+
+                            provider.selectedSort = ProblemSortType.grade;
+
+                            rangeStartGrade = null;
+                            rangeEndGrade = null;
+
                             searchController.clear();
                           });
+
                           provider.filterProblems(
                             "",
                             null,
@@ -614,6 +685,252 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
             ],
           ),
         );
+      },
+    );
+  }
+
+  Future<void> _showSortMenu(
+    ProblemsProvider provider,
+    List<String> availableGrades,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                title: Text(
+                  "Sort problems",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              _sortOption(
+                provider,
+                "Grade",
+                ProblemSortType.grade,
+                availableGrades,
+              ),
+              _sortOption(
+                provider,
+                "Newest",
+                ProblemSortType.newest,
+                availableGrades,
+              ),
+              _sortOption(
+                provider,
+                "Oldest",
+                ProblemSortType.oldest,
+                availableGrades,
+              ),
+              _sortOption(
+                provider,
+                "Most ascents",
+                ProblemSortType.mostAscents,
+                availableGrades,
+              ),
+              _sortOption(
+                provider,
+                "Least ascents",
+                ProblemSortType.leastAscents,
+                availableGrades,
+              ),
+              _sortOption(
+                provider,
+                "Most likes",
+                ProblemSortType.mostLikes,
+                availableGrades,
+              ),
+              _sortOption(
+                provider,
+                "Least likes",
+                ProblemSortType.leastLikes,
+                availableGrades,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showGradeRangeMenu(
+    ProblemsProvider provider,
+    List<String> availableGrades,
+  ) async {
+    if (availableGrades.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Not enough grades available to create a range."),
+        ),
+      );
+      return;
+    }
+
+    String? tempStart = provider.selectedMinGrade;
+    String? tempEnd = provider.selectedMaxGrade;
+
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final rangeReady = tempStart != null && tempEnd != null;
+
+            bool isInRange(String grade) {
+              if (!rangeReady) return false;
+
+              final sorted = [tempStart!, tempEnd!]..sort(provider.gradeSort);
+
+              return provider.gradeSort(grade, sorted[0]) >= 0 &&
+                  provider.gradeSort(grade, sorted[1]) <= 0;
+            }
+
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const ListTile(
+                    title: Text(
+                      "Select grade range",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text("Tap a start grade, then an end grade"),
+                  ),
+
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: availableGrades.map((grade) {
+                        final selected = grade == tempStart || grade == tempEnd;
+                        final highlighted = isInRange(grade);
+
+                        return ListTile(
+                          tileColor: highlighted
+                              ? Colors.blue.withOpacity(0.12)
+                              : null,
+                          leading: selected
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.blue,
+                                )
+                              : const Icon(Icons.radio_button_unchecked),
+                          title: Text(
+                            provider.gradeMode == "vgrade"
+                                ? frenchToVGrade(grade)
+                                : grade,
+                          ),
+                          onTap: () {
+                            setSheetState(() {
+                              if (tempStart == null ||
+                                  (tempStart != null && tempEnd != null)) {
+                                tempStart = grade;
+                                tempEnd = null;
+                              } else {
+                                tempEnd = grade;
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() {
+                                provider.selectedGrade = null;
+                                provider.selectedMinGrade = null;
+                                provider.selectedMaxGrade = null;
+                                rangeStartGrade = null;
+                                rangeEndGrade = null;
+                              });
+
+                              provider.filterProblems(
+                                searchController.text,
+                                null,
+                                extraFilter: activeFilter,
+                              );
+
+                              Navigator.pop(context);
+                            },
+                            child: const Text("Clear range"),
+                          ),
+                        ),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: rangeReady
+                                ? () {
+                                    final sorted = [tempStart!, tempEnd!]
+                                      ..sort(provider.gradeSort);
+
+                                    setState(() {
+                                      rangeStartGrade = sorted[0];
+                                      rangeEndGrade = sorted[1];
+
+                                      provider.selectedGrade = null;
+                                      provider.selectedMinGrade = sorted[0];
+                                      provider.selectedMaxGrade = sorted[1];
+                                    });
+
+                                    provider.filterProblems(
+                                      searchController.text,
+                                      null,
+                                      extraFilter: activeFilter,
+                                    );
+
+                                    Navigator.pop(context);
+                                  }
+                                : null,
+                            child: const Text("Apply"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _sortOption(
+    ProblemsProvider provider,
+    String label,
+    ProblemSortType sortType,
+    List<String> availableGrades,
+  ) {
+    final selected = provider.selectedSort == sortType;
+
+    return ListTile(
+      leading: Icon(
+        selected ? Icons.check_circle : Icons.radio_button_unchecked,
+        color: selected ? Colors.blue : Colors.grey,
+      ),
+      title: Text(label),
+      onTap: () {
+        provider.selectedSort = sortType;
+
+        final grade = availableGrades.contains(provider.selectedGrade)
+            ? provider.selectedGrade
+            : null;
+
+        provider.filterProblems(
+          searchController.text,
+          grade,
+          extraFilter: activeFilter,
+        );
+
+        Navigator.pop(context);
       },
     );
   }
@@ -926,6 +1243,127 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         },
       );
     }
+    final provider = context.read<ProblemsProvider>();
+    final useGradeGroups =
+        isDraftMode || provider.selectedSort == ProblemSortType.grade;
+
+    if (!useGradeGroups) {
+      return ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: displayedProblems.length,
+        itemBuilder: (context, index) {
+          final problem = displayedProblems[index];
+          final rawName = (problem['name'] as String? ?? '').trim();
+
+          Color? bgColor;
+          if (!isDraftMode) {
+            if (provider.tickedProblemsToday.contains(rawName)) {
+              bgColor = Colors.green.shade100;
+            } else if (provider.tickedProblemsPast.contains(rawName)) {
+              bgColor = Colors.purple.shade100;
+            } else if (provider.attemptedProblems.contains(rawName)) {
+              bgColor = Colors.red.shade100;
+            }
+          }
+
+          return Container(
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            decoration: BoxDecoration(
+              color: bgColor ?? Colors.white,
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: ListTile(
+              title: Text(
+                _displayName(
+                  problem,
+                  isDraftMode ? "french" : provider.gradeMode,
+                ),
+              ),
+              subtitle: Text(
+                "${problem['grade'] ?? ''} • ${problem['setter'] ?? ''} - ${problem['comment'] ?? ''}",
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IgnorePointer(
+                    ignoring: true,
+                    child: Opacity(
+                      opacity: 0.6,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.favorite,
+                            color: problem['likedByUser'] == true
+                                ? Colors.purple
+                                : (problem['likesCount'] ?? 0) > 0
+                                ? Colors.red
+                                : Colors.grey,
+                            size: problem['likedByUser'] == true ? 30 : 24,
+                          ),
+                          const SizedBox(width: 4),
+                          Text("${problem['likesCount'] ?? 0}"),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  IgnorePointer(
+                    ignoring: true,
+                    child: Opacity(
+                      opacity: 0.6,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.teal,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 4),
+                          Text("${problem['ticks'] ?? 0}"),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              onTap: () async {
+                final index = displayedProblems.indexOf(problem);
+
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProblemDetailPage(
+                      wallId: widget.wallId,
+                      problem: problem,
+                      problems: displayedProblems,
+                      initialIndex: index,
+                      numRows: provider.numRows,
+                      numCols: provider.numCols,
+                      gradeMode: provider.gradeMode,
+                      superusers: widget.superusers,
+                    ),
+                  ),
+                );
+
+                if (!context.mounted) return;
+
+                final api = context.read<ApiService>();
+                final auth = context.read<AuthState>();
+
+                await provider.load(
+                  widget.wallId,
+                  api,
+                  auth.username ?? "guest",
+                );
+
+                await _refreshListsKeepingSelection();
+              },
+            ),
+          );
+        },
+      );
+    }
 
     return StickyGroupedListView<Map<String, dynamic>, String>(
       elements: displayedProblems,
@@ -1085,16 +1523,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
           ),
         );
       },
-      itemComparator: (a, b) {
-        final provider = context.read<ProblemsProvider>();
-        final gA = (a['grade'] ?? a['Grade'] ?? '').toString();
-        final gB = (b['grade'] ?? b['Grade'] ?? '').toString();
-        final cmp = provider.gradeSort(gA, gB);
-        if (cmp != 0) return cmp;
-        final popA = (a['ticks'] ?? 0) + (a['likesCount'] ?? 0);
-        final popB = (b['ticks'] ?? 0) + (b['likesCount'] ?? 0);
-        return popB.compareTo(popA);
-      },
+      itemComparator: null,
       order: StickyGroupedListOrder.ASC,
     );
   }

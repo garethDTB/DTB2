@@ -64,6 +64,31 @@ class _WallLogPageState extends State<WallLogPage>
 
   // ---------------- HELPERS ----------------
 
+  List<Map<String, String>> _boardsNearWall(String wallId) {
+    final selected = _findWall(wallId);
+    if (selected == null) return [];
+
+    final selectedLat = double.tryParse(selected['lat'] ?? '');
+    final selectedLon = double.tryParse(selected['lon'] ?? '');
+
+    if (selectedLat == null || selectedLon == null) return [selected];
+
+    return walls.where((w) {
+      final lat = double.tryParse(w['lat'] ?? '');
+      final lon = double.tryParse(w['lon'] ?? '');
+      if (lat == null || lon == null) return false;
+
+      final distance = Geolocator.distanceBetween(
+        selectedLat,
+        selectedLon,
+        lat,
+        lon,
+      );
+
+      return distance <= 100;
+    }).toList();
+  }
+
   Map<String, String>? _findWall(String wallId) {
     try {
       return walls.firstWhere((w) => w['appName'] == wallId);
@@ -190,82 +215,88 @@ class _WallLogPageState extends State<WallLogPage>
   }
 
   List<DropdownMenuItem<String>> _buildWallDropdownItems() {
-    List<DropdownMenuItem<String>> items = [];
+    final nearestGroup = _highlightWall == null
+        ? <Map<String, String>>[]
+        : _boardsNearWall(_highlightWall!);
 
-    for (int i = 0; i < walls.length; i++) {
-      final w = walls[i];
-      final appName = w['appName'] ?? '';
-      final userName = w['userName'] ?? '';
-      final isNearest = (i == 0); // nearest wall moved to index 0
-      final distMeters = double.tryParse(w['computedDistance'] ?? '') ?? -1;
+    final nearestIds = nearestGroup
+        .map((w) => w['appName'])
+        .whereType<String>()
+        .toSet();
 
-      final distKm = distMeters > 0
-          ? "${(distMeters / 1000).toStringAsFixed(1)} km"
-          : "";
+    final otherWalls = walls
+        .where((w) => !nearestIds.contains(w['appName']))
+        .toList();
 
-      // --------------------------------------------------------------
-      // 1️⃣ SECTION HEADER AT TOP ("Nearest Wall")
-      // --------------------------------------------------------------
-      if (i == 0) {
-        items.add(
-          const DropdownMenuItem<String>(
-            enabled: false,
-            value: null,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: 6),
-              child: Text(
-                "Nearest Wall",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blueGrey,
-                  fontSize: 14,
-                ),
+    final items = <DropdownMenuItem<String>>[];
+
+    if (nearestGroup.isNotEmpty) {
+      items.add(
+        const DropdownMenuItem<String>(
+          enabled: false,
+          value: null,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text(
+              "Nearest Wall",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey,
+                fontSize: 14,
               ),
             ),
           ),
-        );
+        ),
+      );
+
+      for (final w in nearestGroup) {
+        items.add(_wallDropdownItem(w, isNearest: true));
       }
 
-      // --------------------------------------------------------------
-      // 2️⃣ DIVIDER AFTER THE NEAREST WALL
-      // --------------------------------------------------------------
-      if (i == 1) {
-        items.add(
-          const DropdownMenuItem<String>(
-            enabled: false,
-            value: null,
-            child: Divider(thickness: 1, height: 1),
-          ),
-        );
-      }
-
-      // --------------------------------------------------------------
-      // 3️⃣ ACTUAL WALL ENTRY
-      // --------------------------------------------------------------
       items.add(
-        DropdownMenuItem<String>(
-          value: appName,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                userName,
-                style: TextStyle(
-                  fontWeight: isNearest ? FontWeight.bold : FontWeight.normal,
-                  color: isNearest ? Colors.blue : null,
-                ),
-              ),
-              Text(
-                distKm,
-                style: TextStyle(color: Colors.grey[600], fontSize: 13),
-              ),
-            ],
-          ),
+        const DropdownMenuItem<String>(
+          enabled: false,
+          value: null,
+          child: Divider(thickness: 1, height: 1),
         ),
       );
     }
 
+    for (final w in otherWalls) {
+      items.add(_wallDropdownItem(w));
+    }
+
     return items;
+  }
+
+  DropdownMenuItem<String> _wallDropdownItem(
+    Map<String, String> w, {
+    bool isNearest = false,
+  }) {
+    final appName = w['appName'] ?? '';
+    final userName = w['userName'] ?? '';
+    final distMeters = double.tryParse(w['computedDistance'] ?? '') ?? -1;
+
+    final distKm = distMeters > 0
+        ? "${(distMeters / 1000).toStringAsFixed(1)} km"
+        : "";
+
+    return DropdownMenuItem<String>(
+      value: appName,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            userName,
+            style: TextStyle(
+              fontWeight: isNearest ? FontWeight.bold : FontWeight.normal,
+              color: isNearest ? Colors.blue : null,
+            ),
+          ),
+          Text(distKm, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -717,6 +748,11 @@ class _WallLogPageState extends State<WallLogPage>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
+    final nearbyBoards = selectedWall == null
+        ? <Map<String, String>>[]
+        : _boardsNearWall(selectedWall!);
+
+    final showBoardSelector = nearbyBoards.length > 1;
     return Stack(
       children: [
         Scaffold(

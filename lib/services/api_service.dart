@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart' show rootBundle, ByteData;
+import 'package:flutter/foundation.dart';
 
 class ApiService {
   final String baseUrl;
@@ -597,5 +598,39 @@ class ApiService {
         'DELETE list failed [${resp.statusCode}] for $url\n${resp.body}',
       );
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getBetaVideos(
+    String wallId,
+    String problemId,
+  ) async {
+    final url = Uri.parse(
+      '$baseUrl/walls/${Uri.encodeComponent(wallId)}/problems/${Uri.encodeComponent(problemId)}/beta-videos',
+    );
+
+    debugPrint('🎥 BETA VIDEOS URL: $url');
+
+    final response = await http.get(url);
+
+    debugPrint('🎥 BETA VIDEOS STATUS: ${response.statusCode}');
+    debugPrint('🎥 BETA VIDEOS BODY: ${response.body}');
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load beta videos: ${response.body}');
+    }
+
+    if (response.body.isEmpty) return [];
+
+    final data = jsonDecode(response.body);
+
+    if (data is List) {
+      return data.cast<Map<String, dynamic>>();
+    }
+
+    if (data is Map && data.containsKey('value')) {
+      return (data['value'] as List).cast<Map<String, dynamic>>();
+    }
+
+    return [];
   }
 }
