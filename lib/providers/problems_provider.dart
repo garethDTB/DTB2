@@ -33,12 +33,18 @@ class ProblemsProvider extends ChangeNotifier {
   String gradeMode = "french";
   ProblemSortType selectedSort = ProblemSortType.grade;
   String? selectedGrade;
+  Set<String> selectedHoldFilters = {};
+  Set<String> selectedFootFilters = {};
+
+  List<Map<String, String>> footFilterOptions = [];
 
   int numCols = 0;
   int numRows = 0;
+  int footMode = 0;
 
   bool isLoading = false;
   bool hasLoaded = false;
+  bool holdFilterMatchAll = true; // true = AND, false = OR
 
   Future<void> load(String wallId, ApiService api, String user) async {
     isLoading = true;
@@ -59,7 +65,7 @@ class ProblemsProvider extends ChangeNotifier {
       await _loadTicks(wallId);
       await _loadLikes(wallId);
       await _loadSessions(wallId, api, user); // ✅ hybrid
-      await _loadSettings();
+      await _loadSettings(wallId);
 
       filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
     } finally {
@@ -245,11 +251,70 @@ class ProblemsProvider extends ChangeNotifier {
     tickedProblemsToday = tmpTicksToday;
   }
 
-  Future<void> _loadSettings() async {
-    final data = await rootBundle.loadString('assets/walls/default/Settings');
+  Future<void> _loadSettings(String wallId) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/walls/$wallId/Settings');
+
+    final data = await file.exists()
+        ? await file.readAsString()
+        : await rootBundle.loadString('assets/walls/default/Settings');
+
     final lines = const LineSplitter().convert(data);
+
     numCols = int.tryParse(lines[0]) ?? 0;
     numRows = int.tryParse(lines[1]) ?? 0;
+
+    footFilterOptions.clear();
+
+    footMode = lines.length >= 7 ? int.tryParse(lines[6]) ?? 0 : 0;
+
+    if (footMode == 1 && lines.length >= 8 && lines[7].trim().isNotEmpty) {
+      final parts = lines[7].split(',').map((e) => e.trim()).toList();
+
+      for (int i = 0; i + 1 < parts.length; i += 2) {
+        final token = parts[i];
+        final label = parts[i + 1];
+
+        if (token.isNotEmpty && label.isNotEmpty) {
+          footFilterOptions.add({"token": token, "label": label});
+        }
+      }
+    }
+  }
+
+  void setHoldFilterMatchAll(bool value) {
+    holdFilterMatchAll = value;
+    filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
+  }
+
+  void setFootFilters(Set<String> feet) {
+    selectedFootFilters = Set<String>.from(feet);
+    notifyListeners();
+  }
+
+  void clearFootFilters() {
+    selectedFootFilters.clear();
+    filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
+  }
+
+  void toggleHoldFilter(String holdLabel) {
+    if (selectedHoldFilters.contains(holdLabel)) {
+      selectedHoldFilters.remove(holdLabel);
+    } else {
+      selectedHoldFilters.add(holdLabel);
+    }
+
+    filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
+  }
+
+  void clearHoldFilters() {
+    selectedHoldFilters.clear();
+    filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
+  }
+
+  void setHoldFilters(Set<String> holds) {
+    selectedHoldFilters = Set<String>.from(holds);
+    notifyListeners();
   }
 
   void _sortFilteredProblems() {
@@ -337,8 +402,29 @@ class ProblemsProvider extends ChangeNotifier {
         ProblemFilterType.benchmarks =>
           (problem['comment']?.toLowerCase().contains("benchmark") ?? false),
       };
+      final problemHoldLabels = ((problem['holds'] ?? []) as List)
+          .map((h) => (h['label'] ?? '').toString())
+          .toSet();
 
-      return matchesQuery && matchesGrade && matchesExtra;
+      final matchesHoldFilter =
+          selectedHoldFilters.isEmpty ||
+          (holdFilterMatchAll
+              ? selectedHoldFilters.every(
+                  (hold) => problemHoldLabels.contains(hold),
+                )
+              : selectedHoldFilters.any(
+                  (hold) => problemHoldLabels.contains(hold),
+                ));
+
+      final matchesFootFilter =
+          selectedFootFilters.isEmpty ||
+          selectedFootFilters.every((foot) => problemHoldLabels.contains(foot));
+
+      return matchesQuery &&
+          matchesGrade &&
+          matchesExtra &&
+          matchesHoldFilter &&
+          matchesFootFilter;
     }).toList();
 
     _sortFilteredProblems();
@@ -419,15 +505,19 @@ class ProblemsProvider extends ChangeNotifier {
 
   /// ✅ True if any filter, search, or grade restriction is currently applied
   bool get isFilterActive {
-    // No filter means the lists are identical length
     return filteredProblems.length != allProblems.length ||
-        (selectedGrade != null && selectedGrade!.isNotEmpty);
+        (selectedGrade != null && selectedGrade!.isNotEmpty) ||
+        selectedHoldFilters.isNotEmpty;
   }
 
   /// ✅ Clears all filters and restores the full problem list
   void clearFilters() {
     filteredProblems = List.from(allProblems);
     selectedGrade = null;
+    selectedMinGrade = null;
+    selectedMaxGrade = null;
+    selectedHoldFilters.clear();
+    selectedFootFilters.clear();
     notifyListeners();
   }
 }

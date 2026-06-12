@@ -12,6 +12,7 @@ import 'auth_state.dart';
 import 'services/api_service.dart';
 import 'providers/problems_provider.dart';
 import 'hold_utils.dart';
+import 'hold_filter_page.dart';
 
 class LoadProblemsPage extends StatefulWidget {
   final String wallId;
@@ -60,6 +61,141 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         await provider.load(widget.wallId, api, auth.username ?? "guest");
       });
     }
+  }
+
+  Future<void> _showFootFilterMenu(ProblemsProvider provider) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    title: const Text(
+                      "Filter by feet",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text("Choose foot colour/type"),
+                    trailing: TextButton(
+                      onPressed: () {
+                        provider.clearFootFilters();
+                        provider.filterProblems(
+                          searchController.text,
+                          provider.selectedGrade,
+                          extraFilter: activeFilter,
+                        );
+                        setSheetState(() {});
+                      },
+                      child: const Text("Clear"),
+                    ),
+                  ),
+                  ...provider.footFilterOptions.map((opt) {
+                    final token = opt["token"] ?? "";
+                    final label = opt["label"] ?? token;
+                    final selected = provider.selectedFootFilters.contains(
+                      token,
+                    );
+
+                    return CheckboxListTile(
+                      value: selected,
+                      title: Text(label),
+                      onChanged: (_) {
+                        final updated = Set<String>.from(
+                          provider.selectedFootFilters,
+                        );
+
+                        if (selected) {
+                          updated.remove(token);
+                        } else {
+                          updated.add(token);
+                        }
+
+                        provider.setFootFilters(updated);
+
+                        provider.filterProblems(
+                          searchController.text,
+                          provider.selectedGrade,
+                          extraFilter: activeFilter,
+                        );
+
+                        setSheetState(() {});
+                      },
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showHoldFilterMenu(ProblemsProvider provider) async {
+    final allHolds =
+        provider.allProblems
+            .expand((problem) => (problem['holds'] ?? []) as List)
+            .map((h) => (h['label'] ?? '').toString())
+            .where((h) => h.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Column(
+                children: [
+                  ListTile(
+                    title: const Text(
+                      "Filter by holds",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      provider.selectedHoldFilters.isEmpty
+                          ? "Select one or more holds"
+                          : "Selected: ${provider.selectedHoldFilters.join(', ')}",
+                    ),
+                    trailing: TextButton(
+                      onPressed: () {
+                        provider.clearHoldFilters();
+                        setSheetState(() {});
+                      },
+                      child: const Text("Clear"),
+                    ),
+                  ),
+
+                  Expanded(
+                    child: ListView(
+                      children: allHolds.map((hold) {
+                        final selected = provider.selectedHoldFilters.contains(
+                          hold,
+                        );
+
+                        return CheckboxListTile(
+                          value: selected,
+                          title: Text(hold),
+                          onChanged: (_) {
+                            provider.toggleHoldFilter(hold);
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _deleteList(Map<String, dynamic> list) async {
@@ -331,8 +467,9 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         (!widget.isDraftMode && provider.selectedGrade != null) ||
         provider.selectedMinGrade != null ||
         provider.selectedMaxGrade != null ||
-        provider.selectedSort != ProblemSortType.grade;
-
+        provider.selectedSort != ProblemSortType.grade ||
+        provider.selectedHoldFilters.isNotEmpty ||
+        provider.selectedFootFilters.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -516,7 +653,120 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                       type: ProblemFilterType.benchmarks,
                       availableGrades: availableGrades,
                     ),
+                    Tooltip(
+                      message: "Filter by hold",
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () async {
+                          final result =
+                              await Navigator.push<Map<String, dynamic>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => HoldFilterPage(
+                                    wallId: widget.wallId,
+                                    initiallySelected:
+                                        provider.selectedHoldFilters,
+                                    matchAll: provider.holdFilterMatchAll,
+                                  ),
+                                ),
+                              );
+
+                          if (result == null) return;
+
+                          provider.setHoldFilters(
+                            Set<String>.from(result["holds"] ?? {}),
+                          );
+
+                          provider.setHoldFilterMatchAll(
+                            result["matchAll"] == true,
+                          );
+
+                          provider.filterProblems(
+                            searchController.text,
+                            provider.selectedGrade,
+                            extraFilter: activeFilter,
+                          );
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircleAvatar(
+                              backgroundColor:
+                                  provider.selectedHoldFilters.isNotEmpty
+                                  ? Colors.blue.withOpacity(0.25)
+                                  : Colors.grey[200],
+                              child: const Text(
+                                "✋",
+                                style: TextStyle(fontSize: 21),
+                              ),
+                            ),
+                            if (provider.selectedHoldFilters.isNotEmpty)
+                              Positioned(
+                                right: -4,
+                                top: -4,
+                                child: CircleAvatar(
+                                  radius: 9,
+                                  backgroundColor: Colors.blue,
+                                  child: Text(
+                                    "${provider.selectedHoldFilters.length}",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(width: 12),
+
+                    if (provider.footFilterOptions.isNotEmpty)
+                      Tooltip(
+                        message: "Filter by feet",
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => _showFootFilterMenu(provider),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                backgroundColor:
+                                    provider.selectedFootFilters.isNotEmpty
+                                    ? Colors.yellow.withOpacity(0.35)
+                                    : Colors.grey[200],
+                                child: const Text(
+                                  "🦶",
+                                  style: TextStyle(fontSize: 21),
+                                ),
+                              ),
+                              if (provider.selectedFootFilters.isNotEmpty)
+                                Positioned(
+                                  right: -4,
+                                  top: -4,
+                                  child: CircleAvatar(
+                                    radius: 9,
+                                    backgroundColor: Colors.orange,
+                                    child: Text(
+                                      "${provider.selectedFootFilters.length}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    const SizedBox(width: 12),
+
                     Tooltip(
                       message: "Lists",
                       child: InkWell(
@@ -559,11 +809,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                             searchController.clear();
                           });
 
-                          provider.filterProblems(
-                            "",
-                            null,
-                            extraFilter: ProblemFilterType.none,
-                          );
+                          provider.clearFilters();
                         },
                         child: CircleAvatar(
                           backgroundColor: filtersActive

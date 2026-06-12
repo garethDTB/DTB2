@@ -891,15 +891,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
         footSubtitle = "Feet: ${chosenFeet.join(', ')}";
       }
     } else if (footMode == 2) {
-      final feetLabels = holdsList
-          .where((h) => h['type'] == 'feet')
-          .map((h) => h['label'])
-          .toList();
-      if (feetLabels.isNotEmpty) {
-        footSubtitle = "Feet holds: ${feetLabels.join(', ')}";
-      } else {
-        footSubtitle = "Feet: none";
-      }
+      footSubtitle = null;
     }
 
     // ✅ Problem status colour (attempted/ticked)
@@ -933,7 +925,48 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(titleText),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final textPainter = TextPainter(
+                    text: TextSpan(
+                      text: titleText,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    maxLines: 1,
+                    textDirection: TextDirection.ltr,
+                  )..layout();
+
+                  final overflows = textPainter.width > constraints.maxWidth;
+
+                  return SizedBox(
+                    height: 26,
+                    child: overflows
+                        ? Marquee(
+                            text: titleText,
+                            blankSpace: 40,
+                            velocity: 25,
+                            pauseAfterRound: const Duration(seconds: 2),
+                            startPadding: 20,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          )
+                        : Text(
+                            titleText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                  );
+                },
+              ),
 
               if (footSubtitle != null)
                 Text(
@@ -943,36 +976,22 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
                 ),
 
-              // NEW — Interactive Ticker (fade + auto-hide + pause on tap)
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _tickerPaused = !_tickerPaused;
-                  });
-                },
-                child: SizedBox(
-                  height: 20, // forces ONE text line, prevents wrapping
-                  width: double.infinity,
-                  child: Marquee(
-                    text: _buildTickerText(),
-                    scrollAxis: Axis.horizontal,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    blankSpace: 80.0,
-                    velocity: 24.0,
-                    pauseAfterRound: const Duration(seconds: 1),
-
-                    // ensure you see the start before scrolling
-                    startAfter: const Duration(seconds: 0),
-
-                    // push text fully onscreen before scrolling starts
-                    startPadding: 600.0,
-
-                    // IMPORTANT – prevents any text wrapping to a 2nd line
-                    style: const TextStyle(
-                      fontSize: 11,
-                      height: 1.0,
-                      overflow: TextOverflow.visible,
-                    ),
+              SizedBox(
+                height: 20,
+                width: double.infinity,
+                child: Marquee(
+                  text: _buildTickerText(),
+                  scrollAxis: Axis.horizontal,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  blankSpace: 80.0,
+                  velocity: 24.0,
+                  pauseAfterRound: const Duration(seconds: 1),
+                  startAfter: const Duration(seconds: 0),
+                  startPadding: 600.0,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    height: 1.0,
+                    overflow: TextOverflow.visible,
                   ),
                 ),
               ),
