@@ -94,6 +94,8 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
   File? wallImageFile;
   Timer? _sendThrottle;
   bool _sendQueued = false;
+  bool _isSavingProblem = false;
+  String _savingText = "Saving...";
   late DraftService draftService; // 👈 new service
 
   static const bool kHoldDebug = true;
@@ -136,6 +138,26 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
     // Call your existing function
     _sendToBoardWithFeedback();
+  }
+
+  Future<void> _runSaveWithSpinner(
+    String text,
+    Future<void> Function() action,
+  ) async {
+    if (_isSavingProblem) return;
+
+    setState(() {
+      _isSavingProblem = true;
+      _savingText = text;
+    });
+
+    try {
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingProblem = false);
+      }
+    }
   }
 
   Future<void> _sendToBoardWithFeedback() async {
@@ -680,16 +702,18 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
               editingProblem: editingProblem,
               problemRow: widget.problemRow,
               superusers: widget.superusers,
-              onSave:
-                  (
-                    String name,
-                    String comment,
-                    String grade,
-                    int stars,
-                    List<String> feetTokens, {
-                    bool draft = false,
-                    bool delete = false,
-                  }) async {
+              onSave: (
+                String name,
+                String comment,
+                String grade,
+                int stars,
+                List<String> feetTokens, {
+                bool draft = false,
+                bool delete = false,
+              }) async {
+                await _runSaveWithSpinner(
+                  editingProblem ? "Updating problem..." : "Saving problem...",
+                  () async {
                     final api = context.read<ApiService>();
                     final confirmed = finalConfirmedOrder();
                     final labels = confirmed
@@ -1006,7 +1030,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
             IconButton(
               tooltip: "Delete Problem",
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () async {
+              onPressed: () {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -1075,65 +1099,93 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
       body: SafeArea(
         bottom: true,
-        child: Column(
+        child: Stack(
           children: [
-            // ✅ Instruction bar
-            Container(
-              height: 40,
-              width: double.infinity,
-              color: confirmStage == ConfirmStage.none
-                  ? Colors.grey.shade100
-                  : Colors.yellow.shade100,
-              alignment: Alignment.centerLeft,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  (confirmStage == ConfirmStage.none)
-                      ? (selectionOrder.isEmpty
-                            ? "Please select holds"
-                            : "Selected ${selectionOrder.length} — tap Save to confirm start/finish")
-                      : confirmLabel,
-                  style: TextStyle(
-                    color: confirmLabel.startsWith('!')
-                        ? Colors.red
-                        : Colors.black87,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+            AbsorbPointer(
+              absorbing: _isSavingProblem,
+              child: Column(
+                children: [
+                  Container(
+                    height: 40,
+                    width: double.infinity,
+                    color: confirmStage == ConfirmStage.none
+                        ? Colors.grey.shade100
+                        : Colors.yellow.shade100,
+                    alignment: Alignment.centerLeft,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        (confirmStage == ConfirmStage.none)
+                            ? (selectionOrder.isEmpty
+                                ? "Please select holds"
+                                : "Selected ${selectionOrder.length} — tap Save to confirm start/finish")
+                            : confirmLabel,
+                        style: TextStyle(
+                          color: confirmLabel.startsWith('!')
+                              ? Colors.red
+                              : Colors.black87,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+
+                  Expanded(
+                    child: holds.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : WallPhoto(
+                            holds: holds,
+                            rows: rows,
+                            cols: cols,
+                            baseWidth: baseWidth,
+                            baseHeight: baseHeight,
+                            selectionOrder: selectionOrder,
+                            confirmStage: confirmStage,
+                            cStart1: cStart1,
+                            cStart2: cStart2,
+                            cFinish: cFinish,
+                            feetSelected: feetSelected,
+                            onTapHold: toggleByLabel,
+                            onConfirmTap: handleConfirmTap,
+                            wallImageFile: wallImageFile,
+                          ),
+                  ),
+
+                  LegendBar(footMode: footMode),
+                  const SizedBox(height: 14),
+                ],
               ),
             ),
 
-            Expanded(
-              child: holds.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : WallPhoto(
-                      holds: holds,
-                      rows: rows,
-                      cols: cols,
-                      baseWidth: baseWidth,
-                      baseHeight: baseHeight,
-                      selectionOrder: selectionOrder,
-                      confirmStage: confirmStage,
-                      cStart1: cStart1,
-                      cStart2: cStart2,
-                      cFinish: cFinish,
-                      feetSelected: feetSelected,
-                      onTapHold: toggleByLabel,
-                      onConfirmTap: handleConfirmTap,
-                      wallImageFile: wallImageFile,
+            if (_isSavingProblem)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black26,
+                  child: Center(
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text(_savingText),
+                          ],
+                        ),
+                      ),
                     ),
-            ),
-            LegendBar(footMode: footMode),
-            const SizedBox(height: 14),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 }
-
 // ---------------- WALL PHOTO ----------------
 
 class WallPhoto extends StatelessWidget {
@@ -1684,13 +1736,15 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         final feetTokens = chosenFeetTokens.entries
                             .where((e) => e.value)
                             .map((e) => e.key)
                             .toList();
 
-                        widget.onSave(
+                        Navigator.pop(context);
+
+                        await widget.onSave(
                           nameCtrl.text.trim(),
                           commentCtrl.text.trim(),
                           grade!,
@@ -1698,9 +1752,8 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
                           feetTokens,
                           draft: false,
                         );
-
-                        Navigator.pop(context);
                       },
+
                       child: Text(widget.editingProblem ? "Update" : "Save"),
                     ),
                   ),

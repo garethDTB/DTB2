@@ -28,6 +28,8 @@ import '../../../beta_videos_page.dart';
 bool _mirrorAvailable = false;
 bool _tickerVisible = true;
 bool _tickerPaused = false;
+bool _isLoggingAction = false;
+String _loggingText = "Saving...";
 
 Timer? _tickerTimer;
 
@@ -207,6 +209,26 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
       });
     } catch (e) {
       debugPrint("Failed to load comments: $e");
+    }
+  }
+
+  Future<void> _runWithSpinner(
+    String text,
+    Future<void> Function() action,
+  ) async {
+    if (_isLoggingAction) return;
+
+    setState(() {
+      _isLoggingAction = true;
+      _loggingText = text;
+    });
+
+    try {
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() => _isLoggingAction = false);
+      }
     }
   }
 
@@ -1065,74 +1087,118 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
           ],
         ),
         body: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              Expanded(
-                child: WallView(
-                  holds: holds,
-                  holdsList: holdsList,
-                  baseWidth: baseWidth,
-                  baseHeight: baseHeight,
-                  onSwipeLeft: nextProblem,
-                  onSwipeRight: prevProblem,
-                  colorForHoldType: _colorForHoldType,
-                  isMirrored: isMirrored,
-                  wallImageFile: wallImageFile,
-                  cols: _cols,
-                  rows: _rows,
+              AbsorbPointer(
+                absorbing: _isLoggingAction,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: WallView(
+                        holds: holds,
+                        holdsList: holdsList,
+                        baseWidth: baseWidth,
+                        baseHeight: baseHeight,
+                        onSwipeLeft: nextProblem,
+                        onSwipeRight: prevProblem,
+                        colorForHoldType: _colorForHoldType,
+                        isMirrored: isMirrored,
+                        wallImageFile: wallImageFile,
+                        cols: _cols,
+                        rows: _rows,
+                      ),
+                    ),
+
+                    if (attemptCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          "Attempts: $attemptCount",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+
+                    SizedBox(
+                      height: 40,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: _swipeMessage != null
+                            ? Container(
+                                key: const ValueKey('banner'),
+                                width: double.infinity,
+                                color: _swipeMessageColor,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _swipeMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              )
+                            : const SwipeHintArrow(key: ValueKey('hint')),
+                      ),
+                    ),
+
+                    ActionButtonsRow(
+                      likedByUser: _likedByUser,
+                      likesCount: _likesCount,
+                      onToggleLike: () => _runWithSpinner(
+                        "Updating like...",
+                        () => _toggleLike(context),
+                      ),
+                      onAttempt: () => _runWithSpinner(
+                        "Logging attempt...",
+                        () => _addAttempt(context),
+                      ),
+                      onTick: () => _runWithSpinner(
+                        "Logging tick...",
+                        () => _addTick(context),
+                      ),
+                      onFlash: () => _runWithSpinner(
+                        "Logging flash...",
+                        () => _addTick(context, flash: true),
+                      ),
+                      onSendToBoard: _sendToBoard,
+                      isMirrored: isMirrored,
+                      onMirrorToggle: _mirrorAvailable
+                          ? () {
+                              setState(() => isMirrored = !isMirrored);
+                              HapticFeedback.selectionClick();
+                              if (autoSendToBoard) _sendToBoard();
+                            }
+                          : null,
+                      onWhatsOn: _loadWhatsOn,
+                      onComments: _openComments,
+                    ),
+
+                    const SizedBox(height: 8),
+                    LegendBar(footMode: footMode),
+                  ],
                 ),
               ),
-              if (attemptCount > 0)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    "Attempts: $attemptCount",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+
+              if (_isLoggingAction)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black26,
+                    child: Center(
+                      child: Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 12),
+                              Text(_loggingText),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              SizedBox(
-                height: 40,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: _swipeMessage != null
-                      ? Container(
-                          key: const ValueKey('banner'),
-                          width: double.infinity,
-                          color: _swipeMessageColor,
-                          alignment: Alignment.center,
-                          child: Text(
-                            _swipeMessage!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
-                        )
-                      : const SwipeHintArrow(key: ValueKey('hint')),
-                ),
-              ),
-              ActionButtonsRow(
-                likedByUser: _likedByUser,
-                likesCount: _likesCount,
-                onToggleLike: () => _toggleLike(context),
-                onAttempt: () => _addAttempt(context),
-                onTick: () => _addTick(context),
-                onFlash: () => _addTick(context, flash: true),
-                onSendToBoard: _sendToBoard,
-                isMirrored: isMirrored,
-                onMirrorToggle: _mirrorAvailable
-                    ? () {
-                        setState(() => isMirrored = !isMirrored);
-                        HapticFeedback.selectionClick();
-                        if (autoSendToBoard) _sendToBoard();
-                      }
-                    : null,
-
-                onWhatsOn: _loadWhatsOn,
-                onComments: _openComments,
-              ),
-              const SizedBox(height: 8),
-              LegendBar(footMode: footMode),
             ],
           ),
         ),
