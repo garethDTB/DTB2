@@ -63,6 +63,206 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
     }
   }
 
+  Future<void> _showEditListDialog(Map<String, dynamic> list) async {
+    final titleController = TextEditingController(text: list['Title'] ?? '');
+
+    final descriptionController = TextEditingController(
+      text: list['Description'] ?? '',
+    );
+
+    bool isPublic = list['IsPublic'] ?? true;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Edit list'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'List name'),
+                  ),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  SwitchListTile(
+                    value: isPublic,
+                    title: const Text('Public list'),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isPublic = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    final api = context.read<ApiService>();
+                    final auth = context.read<AuthState>();
+
+                    await api.updateList(
+                      wallId: widget.wallId,
+                      listId: list['id'],
+                      username: auth.username ?? '',
+                      title: title,
+                      description: descriptionController.text.trim(),
+                      isPublic: isPublic,
+                      problems: List<Map<String, dynamic>>.from(
+                        list['Problems'] as List? ?? [],
+                      ),
+                    );
+
+                    if (context.mounted) Navigator.pop(context);
+
+                    await _refreshListsKeepingSelection();
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showSaveCurrentResultsAsListDialog() async {
+    final provider = context.read<ProblemsProvider>();
+
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    bool isPublic = true;
+
+    final problemsToSave = provider.filteredProblems.map((problem) {
+      return {
+        "ProblemId": problem['id'] ?? '',
+        "Problem": problem['name'] ?? '',
+        "Grade": problem['grade'] ?? '',
+        "Order": provider.filteredProblems.indexOf(problem) + 1,
+        "Note": "",
+      };
+    }).toList();
+
+    if (problemsToSave.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No climbs to save as a list.")),
+      );
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Save current results as list'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("This will save ${problemsToSave.length} climbs."),
+                  TextField(
+                    controller: titleController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'List name',
+                      hintText: '6A-6B Benchmarks',
+                    ),
+                  ),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      hintText: 'Optional',
+                    ),
+                  ),
+                  SwitchListTile(
+                    value: isPublic,
+                    title: const Text('Public list'),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isPublic = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    await _createList(
+                      title: title,
+                      description: descriptionController.text.trim(),
+                      isPublic: isPublic,
+                      problems: problemsToSave,
+                    );
+
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _duplicateList(Map<String, dynamic> list) async {
+    final api = context.read<ApiService>();
+    final auth = context.read<AuthState>();
+
+    final username = auth.username ?? '';
+    final displayName = auth.displayName ?? username;
+
+    if (username.isEmpty) return;
+
+    final originalProblems = List<Map<String, dynamic>>.from(
+      list['Problems'] as List? ?? [],
+    );
+
+    final newList = await api.createList(
+      wallId: widget.wallId,
+      username: username,
+      displayName: displayName,
+      title: "${list['Title'] ?? 'Untitled list'} copy",
+      description: list['Description'] ?? '',
+      isPublic: false, // copied lists should become private by default
+      problems: originalProblems,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedList = newList;
+    });
+
+    await _refreshListsKeepingSelection();
+  }
+
   Future<void> _showFootFilterMenu(ProblemsProvider provider) async {
     await showModalBottomSheet(
       context: context,
@@ -864,6 +1064,18 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                 },
               ),
 
+              ListTile(
+                leading: const Icon(Icons.save_alt),
+                title: const Text('Save current results as list'),
+                subtitle: const Text(
+                  'Create a list from the climbs currently shown',
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSaveCurrentResultsAsListDialog();
+                },
+              ),
+
               if (_myLists.isNotEmpty) ...[
                 const Divider(),
                 const Padding(
@@ -876,12 +1088,34 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                 ..._myLists.map((list) {
                   return ListTile(
                     leading: const Icon(Icons.list),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await _deleteList(list);
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.copy),
+                          tooltip: "Duplicate list",
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _duplicateList(list);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          tooltip: "Edit list",
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _showEditListDialog(list);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          tooltip: "Delete list",
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _deleteList(list);
+                          },
+                        ),
+                      ],
                     ),
                     title: Text(list['Title'] ?? 'Untitled list'),
                     subtitle: Text(
@@ -919,6 +1153,14 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                       });
                       Navigator.pop(context);
                     },
+                    trailing: IconButton(
+                      icon: const Icon(Icons.copy),
+                      tooltip: "Copy to my lists",
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _duplicateList(list);
+                      },
+                    ),
                   );
                 }),
               ],
@@ -1254,6 +1496,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
     required String title,
     required String description,
     required bool isPublic,
+    List<Map<String, dynamic>> problems = const [],
   }) async {
     try {
       final api = context.read<ApiService>();
@@ -1271,7 +1514,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         title: title,
         description: description,
         isPublic: isPublic,
-        problems: [],
+        problems: problems,
       );
 
       if (!mounted) return;
