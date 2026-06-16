@@ -133,7 +133,7 @@ class _LogBookPageState extends State<LogBookPage> {
                             ),
                             child: ListTile(
                               title: Text(
-                                "${session.wall} — Score: ${session.score}",
+                                "Score: ${session.score ?? 0}",
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),

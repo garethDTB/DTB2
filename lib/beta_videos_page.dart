@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:provider/provider.dart';
-import 'services/api_service.dart';
 
 class BetaVideosPage extends StatefulWidget {
   final String problemId;
@@ -28,15 +26,6 @@ class BetaVideosPage extends StatefulWidget {
 }
 
 class _BetaVideosPageState extends State<BetaVideosPage> {
-  List<Map<String, dynamic>> betaVideos = [];
-  bool loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBetaVideos();
-  }
-
   String _cleanTag(String input) {
     return input.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
@@ -69,31 +58,11 @@ $hashtags
 ''';
   }
 
-  Future<void> _loadBetaVideos() async {
-    try {
-      final api = context.read<ApiService>();
-
-      final videos = await api.getBetaVideos(widget.wallName, widget.problemId);
-
-      if (!mounted) return;
-
-      setState(() {
-        betaVideos = videos;
-        loading = false;
-      });
-    } catch (e) {
-      debugPrint('Failed to load beta videos: $e');
-
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
-    }
-  }
-
   Future<void> _copyCaption(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: caption));
+
+    if (!context.mounted) return;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Caption copied')));
@@ -101,6 +70,9 @@ $hashtags
 
   Future<void> _copyHashtagsOnly(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: hashtags));
+
+    if (!context.mounted) return;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Hashtags copied')));
@@ -152,65 +124,6 @@ $hashtags
         label: Text(text, style: const TextStyle(fontSize: 16)),
         onPressed: onPressed,
       ),
-    );
-  }
-
-  Widget _buildVideoList() {
-    if (loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (betaVideos.isEmpty) {
-      return const Text(
-        'No beta videos linked yet.',
-        style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
-      );
-    }
-
-    return Column(
-      children: betaVideos.map((video) {
-        final url = (video['Url'] ?? '').toString();
-        final username = (video['Username'] ?? 'Instagram').toString();
-        final captionText = (video['Caption'] ?? '').toString();
-
-        return Card(
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () async {
-              if (url.isNotEmpty) {
-                await launchUrl(
-                  Uri.parse(url),
-                  mode: LaunchMode.externalApplication,
-                );
-              }
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if ((video['ThumbnailUrl'] ?? '').toString().isNotEmpty)
-                  Image.network(
-                    video['ThumbnailUrl'],
-                    width: double.infinity,
-                    height: 220,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox(height: 220),
-                  ),
-
-                ListTile(
-                  leading: const Icon(Icons.play_circle),
-                  title: Text(username),
-                  subtitle: Text(
-                    captionText.isNotEmpty ? captionText : url,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: const Icon(Icons.open_in_new),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -269,10 +182,6 @@ $hashtags
               text: 'Share Video',
               onPressed: _shareVideoPrompt,
             ),
-
-            const SizedBox(height: 32),
-
-            _buildVideoList(),
           ],
         ),
       ),

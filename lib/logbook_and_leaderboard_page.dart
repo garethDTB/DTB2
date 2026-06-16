@@ -23,6 +23,7 @@ import 'models/session.dart';
 import 'services/api_service.dart';
 import 'auth_state.dart';
 import 'session_details_page.dart';
+import 'wall_data_page.dart';
 
 //---------------------------------------------------------
 // MAIN WRAPPER WITH TABS
@@ -34,7 +35,7 @@ class LogBookAndLeaderboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(wallId),
@@ -42,6 +43,7 @@ class LogBookAndLeaderboardPage extends StatelessWidget {
             tabs: [
               Tab(text: "Log Book"),
               Tab(text: "Leaderboard"),
+              Tab(text: "Wall Data"),
             ],
           ),
         ),
@@ -49,6 +51,7 @@ class LogBookAndLeaderboardPage extends StatelessWidget {
           children: [
             LogBookPage(wallId: wallId),
             LeaderboardPage(wallId: wallId),
+            WallDataPage(wallId: wallId),
           ],
         ),
       ),

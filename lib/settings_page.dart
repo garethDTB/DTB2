@@ -17,7 +17,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _autoSend = false;
 
   bool _showGuide = false;
-  final List<bool> _expanded = List.filled(7, false);
+  final List<bool> _expanded = List.filled(9, false);
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _guideKey = GlobalKey();
 
@@ -285,16 +285,24 @@ class _SettingsPageState extends State<SettingsPage> {
                   index: 0,
                   title: "Filters",
                   content:
-                      "The filters and search bar help you quickly find the problems you want:\n\n"
-                      "• 🧩 Grade Filter — Use the dropdown to show only problems of a single grade (e.g. just 6c or 7a+).\n"
-                      "• 🔎 Search Bar — Type any word or phrase to search by name, setter, grade, or comment.\n"
-                      "• ❤️ Liked — Shows problems you’ve liked.\n"
-                      "• ❌ Attempted (not ticked) — Problems you’ve tried but not yet completed.\n"
-                      "• ✅ Ticked — Problems you’ve completed.\n"
-                      "• ⚪ Not ticked — Problems you haven’t attempted or logged yet.\n"
-                      "• ⭐ Benchmarks — Shows only benchmark problems.\n\n"
-                      "Tap an icon to toggle its filter — active ones highlight in colour.\n"
-                      "Use the 🔄 Reset button (which turns red when filters are active) to clear everything and return to the full list.",
+                      "The filters and search tools help you quickly find the problems you want:\n\n"
+                      "• 🔎 Search — Search by problem name, setter, grade or comment.\n"
+                      "• 📏 Grade Range — Show problems between a minimum and maximum grade.\n"
+                      "• ✋ Hold Filter — Find problems using specific holds.\n"
+                      "• 🦶 Foot Filter — Filter by foot options where supported by the wall.\n"
+                      "• ❤️ Liked — Problems you've liked.\n"
+                      "• ❌ Attempted — Problems you've tried but not yet completed.\n"
+                      "• ✅ Ticked — Problems you've completed.\n"
+                      "• ⚪ Unticked — Problems you haven't completed yet.\n"
+                      "• ⭐ Benchmarks — Show benchmark problems only.\n\n"
+                      "Sorting options allow you to organise problems by:\n"
+                      "• Grade\n"
+                      "• Most Recent\n"
+                      "• Oldest\n"
+                      "• Most Ascents\n"
+                      "• Least Ascents\n"
+                      "• Most Likes\n\n"
+                      "Active filters are highlighted in colour. Use the 🔄 Reset button to clear all filters and return to the full problem list.",
                 ),
                 _buildExpandableSection(
                   index: 1,
@@ -325,12 +333,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   index: 3,
                   title: "Editing",
                   content:
-                      "If a problem was created by you, you can edit it directly from the details page.\n\n"
+                      "Problems can be edited from the details page.\n\n"
                       "• Tap the ✏️ pencil icon to enter edit mode.\n"
-                      "• You can change the name, comments, and grade.\n"
-                      "• You can also reselect or adjust your start and finish holds.\n"
-                      "• Once updated, just save to apply your changes.\n\n"
-                      "Other users’ problems cannot be edited, but you can copy or recreate them using Create Problem.",
+                      "• Update the name, comment, grade, stars or hold selection.\n"
+                      "• Adjust start, finish and foot holds where supported.\n"
+                      "• Save your changes to update the problem.\n\n"
+                      "Problems can normally be edited by their creator. Wall superusers may also be able to edit problems. "
+                      "When a problem is updated, the original setter is retained.",
                 ),
                 _buildExpandableSection(
                   index: 4,
@@ -370,6 +379,30 @@ class _SettingsPageState extends State<SettingsPage> {
                       "Make sure your phone or tablet is connected to the internet before casting.\n"
                       "If you see a 🚫 phone symbol on the wall tablet, it means the system is restricted — tap it to remove the restriction and allow mobile devices to connect.",
                 ),
+                _buildExpandableSection(
+                  index: 7,
+                  title: "Lists",
+                  content:
+                      "Lists allow you to save and organise groups of problems.\n\n"
+                      "• Save your current filtered results as a list.\n"
+                      "• Create personal circuits and training sessions.\n"
+                      "• Browse public lists shared by other climbers.\n"
+                      "• Copy public lists to your own account.\n"
+                      "• Edit, rename and delete your own lists.\n"
+                      "• Use lists to track projects, circuits or training goals.\n\n"
+                      "Public lists can be copied to your account and customised without affecting the original list.",
+                ),
+                _buildExpandableSection(
+                  index: 8,
+                  title: "Beta Videos",
+                  content:
+                      "Beta Videos allow climbers to share and discover videos showing how problems have been climbed.\n\n"
+                      "• Watch beta from other climbers.\n"
+                      "• Share useful beta with the community.\n"
+                      "• Discover alternative sequences and methods.\n"
+                      "• Help other climbers unlock difficult moves.\n\n"
+                      "Availability of videos will vary between problems and walls.",
+                ),
               ],
             ),
             secondChild: const SizedBox.shrink(),
@@ -397,7 +430,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
           Center(
             child: Text(
-              "Version 1.0.0 • © 2025 Digital Training Boards",
+              "Version 2.0.0 • © 2026 Digital Training Boards",
               style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
             ),
           ),

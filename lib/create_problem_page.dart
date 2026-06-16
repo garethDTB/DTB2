@@ -702,286 +702,293 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
               editingProblem: editingProblem,
               problemRow: widget.problemRow,
               superusers: widget.superusers,
-              onSave: (
-                String name,
-                String comment,
-                String grade,
-                int stars,
-                List<String> feetTokens, {
-                bool draft = false,
-                bool delete = false,
-              }) async {
-                await _runSaveWithSpinner(
-                  editingProblem ? "Updating problem..." : "Saving problem...",
-                  () async {
-                    final api = context.read<ApiService>();
-                    final confirmed = finalConfirmedOrder();
-                    final labels = confirmed
-                        .map((ws) => labelForWs(ws, cols, rows))
-                        .toList();
+              onSave:
+                  (
+                    String name,
+                    String comment,
+                    String grade,
+                    int stars,
+                    List<String> feetTokens, {
+                    bool draft = false,
+                    bool delete = false,
+                  }) async {
+                    await _runSaveWithSpinner(
+                      editingProblem
+                          ? "Updating problem..."
+                          : "Saving problem...",
+                      () async {
+                        final api = context.read<ApiService>();
+                        final confirmed = finalConfirmedOrder();
+                        final labels = confirmed
+                            .map((ws) => labelForWs(ws, cols, rows))
+                            .toList();
 
-                    final auth = context.read<AuthState>();
+                        final auth = context.read<AuthState>();
 
-                    final originalSetter =
-                        editingProblem &&
-                            widget.problemRow != null &&
-                            widget.problemRow!.length > 4
-                        ? widget.problemRow![4]
-                        : null;
+                        final originalSetter =
+                            editingProblem &&
+                                widget.problemRow != null &&
+                                widget.problemRow!.length > 4
+                            ? widget.problemRow![4]
+                            : null;
 
-                    final setter = originalSetter ?? auth.username ?? "me";
-                    final fullName = "$name $grade";
+                        final setter = originalSetter ?? auth.username ?? "me";
+                        final fullName = "$name $grade";
 
-                    // ---------------- DELETE BRANCH ----------------
-                    if (delete) {
-                      if (editingProblem && widget.problemRow != null) {
-                        String? oldId = widget.problemRow?[0].toString();
+                        // ---------------- DELETE BRANCH ----------------
+                        if (delete) {
+                          if (editingProblem && widget.problemRow != null) {
+                            String? oldId = widget.problemRow?[0].toString();
 
-                        if (oldId == null || oldId.isEmpty) {
-                          final problemName = widget.problemRow![1];
-                          oldId = await api.getProblemIdByName(
-                            widget.wallId,
-                            problemName,
-                          );
-                        }
-
-                        if (oldId != null && oldId.isNotEmpty) {
-                          try {
-                            await api.deleteProblem(widget.wallId, oldId);
-                            debugPrint("🗑️ Deleted from API: $oldId");
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("🗑️ Problem Deleted"),
-                                  backgroundColor: Colors.red,
-                                  duration: Duration(seconds: 2),
-                                ),
+                            if (oldId == null || oldId.isEmpty) {
+                              final problemName = widget.problemRow![1];
+                              oldId = await api.getProblemIdByName(
+                                widget.wallId,
+                                problemName,
                               );
                             }
-                          } catch (e) {
-                            debugPrint("⚠️ Failed to delete: $e");
+
+                            if (oldId != null && oldId.isNotEmpty) {
+                              try {
+                                await api.deleteProblem(widget.wallId, oldId);
+                                debugPrint("🗑️ Deleted from API: $oldId");
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("🗑️ Problem Deleted"),
+                                      backgroundColor: Colors.red,
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                debugPrint("⚠️ Failed to delete: $e");
+                              }
+                            }
                           }
+                          return; // stop here
                         }
-                      }
-                      return; // stop here
-                    }
 
-                    // ---------------- VALIDATION ----------------
-                    if (name.trim().isEmpty) return;
-                    if (confirmed.isEmpty) return;
-                    if (cStart1 == null && cStart2 == null) return;
-                    if (cFinish == null) return;
+                        // ---------------- VALIDATION ----------------
+                        if (name.trim().isEmpty) return;
+                        if (confirmed.isEmpty) return;
+                        if (cStart1 == null && cStart2 == null) return;
+                        if (cFinish == null) return;
 
-                    // ✅ Skip duplicate checks if editing
-                    if (!draft && !editingProblem) {
-                      if (await _isDuplicate(fullName)) return;
-                      final dupProblem = await _isDuplicateHoldSet(labels);
-                      if (dupProblem != null) return;
-                    }
+                        // ✅ Skip duplicate checks if editing
+                        if (!draft && !editingProblem) {
+                          if (await _isDuplicate(fullName)) return;
+                          final dupProblem = await _isDuplicateHoldSet(labels);
+                          if (dupProblem != null) return;
+                        }
 
-                    // ---------------- STARTS / FINISH / INTERMEDIATES ----------------
-                    final starts = <String>[];
-                    if (cStart1 != null) {
-                      starts.add(labelForWs(cStart1!, cols, rows));
-                    }
-                    if (cStart2 != null) {
-                      starts.add(labelForWs(cStart2!, cols, rows));
-                    }
+                        // ---------------- STARTS / FINISH / INTERMEDIATES ----------------
+                        final starts = <String>[];
+                        if (cStart1 != null) {
+                          starts.add(labelForWs(cStart1!, cols, rows));
+                        }
+                        if (cStart2 != null) {
+                          starts.add(labelForWs(cStart2!, cols, rows));
+                        }
 
-                    final finish = cFinish != null
-                        ? labelForWs(cFinish!, cols, rows)
-                        : "";
+                        final finish = cFinish != null
+                            ? labelForWs(cFinish!, cols, rows)
+                            : "";
 
-                    final intermediates = labels
-                        .where((l) => !starts.contains(l) && l != finish)
-                        .toList();
+                        final intermediates = labels
+                            .where((l) => !starts.contains(l) && l != finish)
+                            .toList();
 
-                    // feetMode=2 → add "feet" marker + selected foot holds
-                    if (footMode == 2 && feetSelected.isNotEmpty) {
-                      // Remove foot holds from intermediates (correcting for label vs wsIndex)
-                      intermediates.removeWhere((label) {
-                        final ws = tryWsIndexFromLabel(label, cols, rows);
-                        return ws != null && feetSelected.contains(ws);
-                      });
+                        // feetMode=2 → add "feet" marker + selected foot holds
+                        if (footMode == 2 && feetSelected.isNotEmpty) {
+                          // Remove foot holds from intermediates (correcting for label vs wsIndex)
+                          intermediates.removeWhere((label) {
+                            final ws = tryWsIndexFromLabel(label, cols, rows);
+                            return ws != null && feetSelected.contains(ws);
+                          });
 
-                      // Append feet section
-                      intermediates.add("feet");
+                          // Append feet section
+                          intermediates.add("feet");
 
-                      // Add feet only once
-                      intermediates.addAll(feetSelected.map((ws) => "hold$ws"));
-                    }
-
-                    // feetMode=1 → add tokens from dialog
-                    if (footMode == 1 && feetTokens.isNotEmpty) {
-                      intermediates.addAll(feetTokens);
-                    }
-
-                    // ---------------- DRAFT BRANCH ----------------
-                    if (draft) {
-                      final success = await draftService.appendDraft(
-                        finalConfirmedOrder(),
-                        fullName: fullName,
-                        grade: grade,
-                        comment: comment,
-                        setter: setter,
-                        stars: stars,
-                        feetTokens: intermediates.contains("feet")
-                            ? intermediates.sublist(
-                                intermediates.indexOf("feet") + 1,
-                              )
-                            : feetTokens,
-                        footMode: footMode,
-                      );
-                      if (!success && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              "⚠️ You can only keep 10 drafts. Delete one first.",
-                            ),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                      return; // stop draft save
-                    }
-
-                    // ---------------- EDITING BRANCH ----------------
-                    if (editingProblem && widget.problemRow != null) {
-                      var oldId = widget.problemRow?[0].toString();
-                      if (oldId == null || oldId.isEmpty) {
-                        final problemName = widget.problemRow![1];
-                        try {
-                          oldId = await api.getProblemIdByName(
-                            widget.wallId,
-                            problemName,
+                          // Add feet only once
+                          intermediates.addAll(
+                            feetSelected.map((ws) => "hold$ws"),
                           );
-                        } catch (_) {}
-                      }
+                        }
 
-                      if (oldId != null && oldId.isNotEmpty) {
-                        try {
-                          await api.deleteProblem(widget.wallId, oldId);
-                        } catch (_) {}
-                      }
+                        // feetMode=1 → add tokens from dialog
+                        if (footMode == 1 && feetTokens.isNotEmpty) {
+                          intermediates.addAll(feetTokens);
+                        }
 
-                      await api.saveProblem(
-                        widget.wallId,
-                        fullName,
-                        grade,
-                        comment,
-                        setter,
-                        stars,
-                        starts.map((l) {
-                          final ws = tryWsIndexFromLabel(l, cols, rows);
-                          return ws == null ? l : "hold$ws";
-                        }).toList(),
-                        intermediates.map((l) {
-                          final ws = tryWsIndexFromLabel(l, cols, rows);
-                          return ws == null ? l : "hold$ws";
-                        }).toList(),
-                        finish.isEmpty
-                            ? ""
-                            : (() {
-                                final ws = tryWsIndexFromLabel(
-                                  finish,
-                                  cols,
-                                  rows,
-                                );
-                                return ws == null ? finish : "hold$ws";
-                              })(),
-                      );
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("✅ Problem updated"),
-                            backgroundColor: Colors.green,
-                            duration: Duration(seconds: 2),
-                          ),
+                        // ---------------- DRAFT BRANCH ----------------
+                        if (draft) {
+                          final success = await draftService.appendDraft(
+                            finalConfirmedOrder(),
+                            fullName: fullName,
+                            grade: grade,
+                            comment: comment,
+                            setter: setter,
+                            stars: stars,
+                            feetTokens: intermediates.contains("feet")
+                                ? intermediates.sublist(
+                                    intermediates.indexOf("feet") + 1,
+                                  )
+                                : feetTokens,
+                            footMode: footMode,
+                          );
+                          if (!success && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "⚠️ You can only keep 10 drafts. Delete one first.",
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                          return; // stop draft save
+                        }
+
+                        // ---------------- EDITING BRANCH ----------------
+                        if (editingProblem && widget.problemRow != null) {
+                          var oldId = widget.problemRow?[0].toString();
+                          if (oldId == null || oldId.isEmpty) {
+                            final problemName = widget.problemRow![1];
+                            try {
+                              oldId = await api.getProblemIdByName(
+                                widget.wallId,
+                                problemName,
+                              );
+                            } catch (_) {}
+                          }
+
+                          if (oldId != null && oldId.isNotEmpty) {
+                            try {
+                              await api.deleteProblem(widget.wallId, oldId);
+                            } catch (_) {}
+                          }
+
+                          await api.saveProblem(
+                            widget.wallId,
+                            fullName,
+                            grade,
+                            comment,
+                            setter,
+                            stars,
+                            starts.map((l) {
+                              final ws = tryWsIndexFromLabel(l, cols, rows);
+                              return ws == null ? l : "hold$ws";
+                            }).toList(),
+                            intermediates.map((l) {
+                              final ws = tryWsIndexFromLabel(l, cols, rows);
+                              return ws == null ? l : "hold$ws";
+                            }).toList(),
+                            finish.isEmpty
+                                ? ""
+                                : (() {
+                                    final ws = tryWsIndexFromLabel(
+                                      finish,
+                                      cols,
+                                      rows,
+                                    );
+                                    return ws == null ? finish : "hold$ws";
+                                  })(),
+                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("✅ Problem updated"),
+                                backgroundColor: Colors.green,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+
+                          // ✅ Return to the Wall Log Page after a tiny delay
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (!mounted) return;
+                            Navigator.of(
+                              context,
+                            ).pop(true); // ← Pop CreateProblemPage
+                          });
+
+                          return;
+                        }
+
+                        // ---------------- CREATE BRANCH (NEW PROBLEM) ----------------
+                        await api.saveProblem(
+                          widget.wallId,
+                          fullName,
+                          grade,
+                          comment,
+                          setter,
+                          stars,
+                          starts.map((l) {
+                            final ws = tryWsIndexFromLabel(l, cols, rows);
+                            return ws == null ? l : "hold$ws";
+                          }).toList(),
+                          intermediates.map((l) {
+                            final ws = tryWsIndexFromLabel(l, cols, rows);
+                            return ws == null ? l : "hold$ws";
+                          }).toList(),
+                          finish.isEmpty
+                              ? ""
+                              : (() {
+                                  final ws = tryWsIndexFromLabel(
+                                    finish,
+                                    cols,
+                                    rows,
+                                  );
+                                  return ws == null ? finish : "hold$ws";
+                                })(),
                         );
-                      }
 
-                      // ✅ Return to the Wall Log Page after a tiny delay
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        if (!mounted) return;
-                        Navigator.of(
-                          context,
-                        ).pop(true); // ← Pop CreateProblemPage
-                      });
+                        // ✅ also write to local CSV
+                        await _appendToCsv([
+                          DateTime.now().millisecondsSinceEpoch.toString(),
+                          fullName,
+                          grade,
+                          comment,
+                          setter,
+                          stars.toString(),
+                          ...starts.map((l) {
+                            final ws = tryWsIndexFromLabel(l, cols, rows);
+                            return ws == null ? l : "hold$ws";
+                          }),
+                          ...intermediates.map((l) {
+                            final ws = tryWsIndexFromLabel(l, cols, rows);
+                            return ws == null ? l : "hold$ws";
+                          }),
+                          finish.isEmpty
+                              ? ""
+                              : (() {
+                                  final ws = tryWsIndexFromLabel(
+                                    finish,
+                                    cols,
+                                    rows,
+                                  );
+                                  return ws == null ? finish : "hold$ws";
+                                })(),
+                        ]);
 
-                      return;
-                    }
-
-                    // ---------------- CREATE BRANCH (NEW PROBLEM) ----------------
-                    await api.saveProblem(
-                      widget.wallId,
-                      fullName,
-                      grade,
-                      comment,
-                      setter,
-                      stars,
-                      starts.map((l) {
-                        final ws = tryWsIndexFromLabel(l, cols, rows);
-                        return ws == null ? l : "hold$ws";
-                      }).toList(),
-                      intermediates.map((l) {
-                        final ws = tryWsIndexFromLabel(l, cols, rows);
-                        return ws == null ? l : "hold$ws";
-                      }).toList(),
-                      finish.isEmpty
-                          ? ""
-                          : (() {
-                              final ws = tryWsIndexFromLabel(
-                                finish,
-                                cols,
-                                rows,
-                              );
-                              return ws == null ? finish : "hold$ws";
-                            })(),
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text(
+                                "✅ Problem Saved. Press clear to start again",
+                              ),
+                              backgroundColor: Colors.green.shade600,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (!mounted) return;
+                            Navigator.of(context).pop(true);
+                          });
+                        }
+                      },
                     );
-
-                    // ✅ also write to local CSV
-                    await _appendToCsv([
-                      DateTime.now().millisecondsSinceEpoch.toString(),
-                      fullName,
-                      grade,
-                      comment,
-                      setter,
-                      stars.toString(),
-                      ...starts.map((l) {
-                        final ws = tryWsIndexFromLabel(l, cols, rows);
-                        return ws == null ? l : "hold$ws";
-                      }),
-                      ...intermediates.map((l) {
-                        final ws = tryWsIndexFromLabel(l, cols, rows);
-                        return ws == null ? l : "hold$ws";
-                      }),
-                      finish.isEmpty
-                          ? ""
-                          : (() {
-                              final ws = tryWsIndexFromLabel(
-                                finish,
-                                cols,
-                                rows,
-                              );
-                              return ws == null ? finish : "hold$ws";
-                            })(),
-                    ]);
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text(
-                            "✅ Problem Saved. Press clear to start again",
-                          ),
-                          backgroundColor: Colors.green.shade600,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        if (!mounted) return;
-                        Navigator.of(context).pop(true);
-                      });
-                    }
                   },
             ),
           );
@@ -1030,7 +1037,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
             IconButton(
               tooltip: "Delete Problem",
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () {
+              onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -1118,8 +1125,8 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                       child: Text(
                         (confirmStage == ConfirmStage.none)
                             ? (selectionOrder.isEmpty
-                                ? "Please select holds"
-                                : "Selected ${selectionOrder.length} — tap Save to confirm start/finish")
+                                  ? "Please select holds"
+                                  : "Selected ${selectionOrder.length} — tap Save to confirm start/finish")
                             : confirmLabel,
                         style: TextStyle(
                           color: confirmLabel.startsWith('!')
