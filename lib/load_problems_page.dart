@@ -56,8 +56,16 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
 
       Future.microtask(() async {
         final provider = context.read<ProblemsProvider>();
+
+        if (provider.hasLoaded &&
+            provider.allProblems.isNotEmpty &&
+            provider.loadedWallId == widget.wallId) {
+          return;
+        }
+
         final api = context.read<ApiService>();
         final auth = context.read<AuthState>();
+
         await provider.load(widget.wallId, api, auth.username ?? "guest");
       });
     }
@@ -637,7 +645,12 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
           onRefresh: () async {
             final api = context.read<ApiService>();
             final auth = context.read<AuthState>();
-            await provider.load(widget.wallId, api, auth.username!);
+            await provider.load(
+              widget.wallId,
+              api,
+              auth.username ?? "guest",
+              forceRefresh: true,
+            );
 
             // 🔄 Reset filters & search after reload
             setState(() {
@@ -692,6 +705,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                   widget.wallId,
                   api,
                   auth.username ?? "guest",
+                  forceRefresh: true,
                 );
               },
             ),
@@ -1723,6 +1737,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                         widget.wallId,
                         api,
                         auth.username ?? "guest",
+                        forceRefresh: true,
                       );
 
                       await _refreshListsKeepingSelection();
@@ -1844,6 +1859,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                   widget.wallId,
                   api,
                   auth.username ?? "guest",
+                  forceRefresh: true,
                 );
 
                 await _refreshListsKeepingSelection();
@@ -2004,6 +2020,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                   widget.wallId,
                   api,
                   auth.username ?? "guest",
+                  forceRefresh: true,
                 );
 
                 await _refreshListsKeepingSelection();

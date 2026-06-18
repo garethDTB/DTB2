@@ -186,6 +186,25 @@ class _CommentsPageState extends State<CommentsPage> {
     return gradeMode == "vgrade" ? frenchToVGrade(best) : best;
   }
 
+  Color _gradeChipColor(String suggestedFrench) {
+    final officialPts = _pts(widget.grade.toLowerCase());
+    final suggestedPts = _pts(suggestedFrench.toLowerCase());
+
+    if (officialPts == 0 || suggestedPts == 0) {
+      return Colors.grey.shade200;
+    }
+
+    if (suggestedPts > officialPts) {
+      return Colors.orange.shade200; // harder
+    }
+
+    if (suggestedPts < officialPts) {
+      return Colors.blue.shade200; // easier
+    }
+
+    return Colors.green.shade200; // same
+  }
+
   // ★ Difficulty indicator widget
   Widget _difficultyIndicator(String suggestedFrench) {
     final official = widget.grade.toLowerCase();
@@ -265,18 +284,14 @@ class _CommentsPageState extends State<CommentsPage> {
                             if ((userOwn["Suggested_grade"] ?? "")
                                 .toString()
                                 .isNotEmpty)
-                              Row(
-                                children: [
-                                  Text(
-                                    "Suggested: ${_displayGrade(userOwn["Suggested_grade"])}  ",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  _difficultyIndicator(
-                                    userOwn["Suggested_grade"],
-                                  ),
-                                ],
+                              Chip(
+                                label: Text(
+                                  _displayGrade(userOwn["Suggested_grade"]),
+                                ),
+                                backgroundColor: _gradeChipColor(
+                                  userOwn["Suggested_grade"],
+                                ),
+                                visualDensity: VisualDensity.compact,
                               ),
                             Text(userOwn["Comment"]),
                           ],
@@ -313,18 +328,14 @@ class _CommentsPageState extends State<CommentsPage> {
                                       if ((c["Suggested_grade"] ?? "")
                                           .toString()
                                           .isNotEmpty)
-                                        Row(
-                                          children: [
-                                            Text(
-                                              "Suggested: ${_displayGrade(c["Suggested_grade"])}  ",
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            _difficultyIndicator(
-                                              c["Suggested_grade"],
-                                            ),
-                                          ],
+                                        Chip(
+                                          label: Text(
+                                            _displayGrade(c["Suggested_grade"]),
+                                          ),
+                                          backgroundColor: _gradeChipColor(
+                                            c["Suggested_grade"],
+                                          ),
+                                          visualDensity: VisualDensity.compact,
                                         ),
                                       Text(c["Comment"]),
                                     ],
@@ -349,18 +360,50 @@ class _CommentsPageState extends State<CommentsPage> {
                             children: [
                               const Text("Suggested grade: "),
                               const SizedBox(width: 8),
-                              DropdownButton<String>(
-                                hint: const Text("None"),
-                                value: _selectedSuggestedGrade,
-                                items: _frenchGrades.map((fr) {
-                                  return DropdownMenuItem(
-                                    value: fr,
-                                    child: Text(_displayGrade(fr)),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  setState(() => _selectedSuggestedGrade = val);
-                                },
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _selectedSuggestedGrade == null
+                                      ? Colors.transparent
+                                      : _gradeChipColor(
+                                          _selectedSuggestedGrade!,
+                                        ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: DropdownButton<String>(
+                                  hint: const Text("None"),
+                                  value: _selectedSuggestedGrade,
+                                  items: _frenchGrades.map((fr) {
+                                    return DropdownMenuItem(
+                                      value: fr,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _gradeChipColor(fr),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _displayGrade(fr),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    setState(
+                                      () => _selectedSuggestedGrade = val,
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ),

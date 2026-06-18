@@ -25,13 +25,22 @@ import 'auth_state.dart';
 import 'session_details_page.dart';
 import 'wall_data_page.dart';
 
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
 //---------------------------------------------------------
 // MAIN WRAPPER WITH TABS
 //---------------------------------------------------------
 class LogBookAndLeaderboardPage extends StatelessWidget {
   final String wallId;
-  const LogBookAndLeaderboardPage({super.key, required this.wallId});
+  final List<String> centreWallIds;
 
+  const LogBookAndLeaderboardPage({
+    super.key,
+    required this.wallId,
+    required this.centreWallIds,
+  });
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -49,8 +58,8 @@ class LogBookAndLeaderboardPage extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            LogBookPage(wallId: wallId),
-            LeaderboardPage(wallId: wallId),
+            LogBookPage(wallId: wallId, centreWallIds: centreWallIds),
+            LeaderboardPage(wallId: wallId, centreWallIds: centreWallIds),
             WallDataPage(wallId: wallId),
           ],
         ),
@@ -64,7 +73,13 @@ class LogBookAndLeaderboardPage extends StatelessWidget {
 //---------------------------------------------------------
 class LogBookPage extends StatefulWidget {
   final String wallId;
-  const LogBookPage({super.key, required this.wallId});
+  final List<String> centreWallIds;
+
+  const LogBookPage({
+    super.key,
+    required this.wallId,
+    required this.centreWallIds,
+  });
 
   @override
   State<LogBookPage> createState() => _LogBookPageState();
@@ -73,11 +88,105 @@ class LogBookPage extends StatefulWidget {
 class _LogBookPageState extends State<LogBookPage> {
   List<Session> _sessions = [];
   bool _loading = true;
+  bool _centreMode = false;
 
   @override
   void initState() {
     super.initState();
     _loadSessions();
+  }
+
+  Future<void> _exportSessionsCsv() async {
+    if (_sessions.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("No sessions to export.")));
+      return;
+    }
+
+    String clean(dynamic value) {
+      final text = (value ?? '').toString().replaceAll('"', '""');
+      return '"$text"';
+    }
+
+    final rows = <String>[
+      "Session Date,User,Wall,Session Score,Type,Problem,Grade,Attempts,Stars,Notes,Too Hard,Too Easy",
+    ];
+
+    for (final s in _sessions) {
+      final date = DateFormat('yyyy-MM-dd').format(s.date);
+
+      for (final sent in s.sent) {
+        rows.add(
+          [
+            clean(date),
+            clean(s.user),
+            clean(s.wall),
+            s.score,
+            clean("Sent"),
+            clean(sent.problem),
+            clean(sent.grade),
+            sent.attempts,
+            sent.stars ?? "",
+            clean(sent.notes ?? ""),
+            sent.tooHard == true ? "Yes" : "",
+            sent.tooEasy == true ? "Yes" : "",
+          ].join(","),
+        );
+      }
+
+      for (final attempt in s.attempts) {
+        rows.add(
+          [
+            clean(date),
+            clean(s.user),
+            clean(s.wall),
+            s.score,
+            clean("Attempt"),
+            clean(attempt.problem),
+            clean(attempt.grade),
+            attempt.attempts,
+            "",
+            "",
+            "",
+            "",
+          ].join(","),
+        );
+      }
+
+      if (s.sent.isEmpty && s.attempts.isEmpty) {
+        rows.add(
+          [
+            clean(date),
+            clean(s.user),
+            clean(s.wall),
+            s.score,
+            clean("Session only"),
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+          ].join(","),
+        );
+      }
+    }
+
+    final csv = rows.join('\n');
+
+    final dir = await getTemporaryDirectory();
+    final modeName = _centreMode ? "centre" : "board";
+    final file = File(
+      '${dir.path}/dtb_${widget.wallId}_${modeName}_logbook_full.csv',
+    );
+
+    await file.writeAsString(csv);
+
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], text: "DTB full log book export");
   }
 
   Future<void> _loadSessions() async {
@@ -86,9 +195,17 @@ class _LogBookPageState extends State<LogBookPage> {
     final username = auth.username ?? "guest";
 
     try {
-      final raw = await api.getSessions(widget.wallId, username);
+      final wallIds = _centreMode ? widget.centreWallIds : [widget.wallId];
+
+      final allRaw = <dynamic>[];
+
+      for (final id in wallIds) {
+        final raw = await api.getSessions(id, username);
+        allRaw.addAll(raw);
+      }
+
       setState(() {
-        _sessions = raw.map((s) => Session.fromJson(s)).toList()
+        _sessions = allRaw.map((s) => Session.fromJson(s)).toList()
           ..sort((a, b) => b.date.compareTo(a.date));
       });
     } catch (_) {
@@ -119,18 +236,46 @@ class _LogBookPageState extends State<LogBookPage> {
         ),
         itemBuilder: (context, index) {
           if (index == 0) {
-            return Card(
-              margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-              child: ListTile(
-                leading: const Icon(Icons.assessment),
-                title: Text(
-                  "$totalSessions session${totalSessions == 1 ? '' : 's'}",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+            return Column(
+              children: [
+                if (widget.centreWallIds.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text("Board")),
+                        ButtonSegment(value: true, label: Text("Centre")),
+                      ],
+                      selected: {_centreMode},
+                      onSelectionChanged: (value) async {
+                        setState(() {
+                          _centreMode = value.first;
+                          _loading = true;
+                        });
+                        await _loadSessions();
+                      },
+                    ),
+                  ),
+
+                Card(
+                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                  child: ListTile(
+                    leading: const Icon(Icons.assessment),
+                    title: Text(
+                      "$totalSessions session${totalSessions == 1 ? '' : 's'}",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      "Total score: $totalScore\nAverage score: $averageScore",
+                    ),
+                    trailing: IconButton(
+                      tooltip: "Export CSV",
+                      icon: const Icon(Icons.download),
+                      onPressed: _exportSessionsCsv,
+                    ),
+                  ),
                 ),
-                subtitle: Text(
-                  "Total score: $totalScore\nAverage score: $averageScore",
-                ),
-              ),
+              ],
             );
           }
 
@@ -181,7 +326,13 @@ class _LogBookPageState extends State<LogBookPage> {
 //---------------------------------------------------------
 class LeaderboardPage extends StatefulWidget {
   final String wallId;
-  const LeaderboardPage({super.key, required this.wallId});
+  final List<String> centreWallIds;
+
+  const LeaderboardPage({
+    super.key,
+    required this.wallId,
+    required this.centreWallIds,
+  });
 
   @override
   State<LeaderboardPage> createState() => _LeaderboardPageState();
@@ -193,7 +344,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
 
   // Recent sessions (last 90 days) – used for fast default calculations.
   List<Session> _recent90Sessions = [];
-
+  bool _centreMode = false;
   bool _loading = true;
   String? _error;
 
@@ -233,7 +384,14 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     final api = context.read<ApiService>();
 
     try {
-      final raw = await api.getAllSessionsForWall(widget.wallId);
+      final wallIds = _centreMode ? widget.centreWallIds : [widget.wallId];
+
+      final raw = <dynamic>[];
+
+      for (final id in wallIds) {
+        final wallRaw = await api.getAllSessionsForWall(id);
+        raw.addAll(wallRaw);
+      }
 
       final sessions = raw.map((e) => Session.fromJson(e)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
@@ -1210,7 +1368,21 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
             child: Column(
               children: [
                 const SizedBox(height: 8),
-
+                if (widget.centreWallIds.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text("Board")),
+                        ButtonSegment(value: true, label: Text("Centre")),
+                      ],
+                      selected: {_centreMode},
+                      onSelectionChanged: (value) async {
+                        setState(() => _centreMode = value.first);
+                        await _loadSessions();
+                      },
+                    ),
+                  ),
                 // Filter chips
                 Wrap(
                   spacing: 6,

@@ -35,6 +35,7 @@ class ProblemsProvider extends ChangeNotifier {
   String? selectedGrade;
   Set<String> selectedHoldFilters = {};
   Set<String> selectedFootFilters = {};
+  String? loadedWallId;
 
   List<Map<String, String>> footFilterOptions = [];
 
@@ -46,9 +47,22 @@ class ProblemsProvider extends ChangeNotifier {
   bool hasLoaded = false;
   bool holdFilterMatchAll = true; // true = AND, false = OR
 
-  Future<void> load(String wallId, ApiService api, String user) async {
+  Future<void> load(
+    String wallId,
+    ApiService api,
+    String user, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh &&
+        hasLoaded &&
+        allProblems.isNotEmpty &&
+        loadedWallId == wallId) {
+      return;
+    }
+
     isLoading = true;
-    hasLoaded = false; // <-- add this
+    hasLoaded = false;
+    loadedWallId = wallId;
     notifyListeners();
 
     // ✅ Reset all state before loading new wall

@@ -115,6 +115,56 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     });
   }
 
+  Color _gradeChipColor(String currentGrade, String suggestedGrade) {
+    const grades = [
+      '4',
+      '4+',
+      '5',
+      '5+',
+      '5a',
+      '5a+',
+      '5b',
+      '5b+',
+      '5c',
+      '5c+',
+      '6a',
+      '6a+',
+      '6b',
+      '6b+',
+      '6c',
+      '6c+',
+      '7a',
+      '7a+',
+      '7b',
+      '7b+',
+      '7c',
+      '7c+',
+      '8a',
+      '8a+',
+      '8b',
+      '8b+',
+      '8c',
+      '8c+',
+    ];
+
+    final currentIndex = grades.indexOf(currentGrade.trim());
+    final suggestedIndex = grades.indexOf(suggestedGrade.trim());
+
+    if (currentIndex == -1 || suggestedIndex == -1) {
+      return Colors.grey.shade200;
+    }
+
+    if (suggestedIndex == currentIndex) {
+      return Colors.green.shade200; // agrees
+    }
+
+    if (suggestedIndex > currentIndex) {
+      return Colors.orange.shade200; // thinks harder
+    }
+
+    return Colors.blue.shade200; // thinks easier
+  }
+
   String _buildTickerText() {
     final parts = <String>[];
 
@@ -169,6 +219,110 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
         .replaceAll('\n', ' ') // remove newlines
         .replaceAll('\r', ' ')
         .replaceAll(RegExp(r'\s{2,}'), ' '); // collapse double spaces
+  }
+
+  void _showExpandedComments() {
+    final problem = widget.problems[currentIndex];
+
+    final setter = (problem['setter'] ?? '').toString().trim();
+    final baseComment = (problem['comment'] ?? '').toString().trim();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.55,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Text(
+                    "Comments",
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (setter.isNotEmpty)
+                    Text(
+                      "Setter: $setter",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+
+                  if (baseComment.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(baseComment),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  if (_allComments.isEmpty) const Text("No user comments yet."),
+
+                  ..._allComments.map((c) {
+                    final user = (c['User'] ?? c['user'] ?? '')
+                        .toString()
+                        .trim();
+                    final text = (c['Comment'] ?? c['comment'] ?? '')
+                        .toString()
+                        .trim();
+                    final suggestedRaw =
+                        (c['Suggested_grade'] ?? c['suggested_grade'] ?? '')
+                            .toString()
+                            .trim();
+
+                    String suggestedDisplay = "";
+                    if (suggestedRaw.isNotEmpty) {
+                      suggestedDisplay = gradeMode == "vgrade"
+                          ? frenchToVGrade(suggestedRaw)
+                          : suggestedRaw;
+                    }
+
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.isEmpty ? "User" : user,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            if (suggestedDisplay.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Chip(
+                                label: Text(suggestedDisplay),
+                                backgroundColor: _gradeChipColor(
+                                  problem['grade']?.toString() ?? '',
+                                  suggestedRaw,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ],
+                            if (text.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(text),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -998,22 +1152,25 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
                 ),
 
-              SizedBox(
-                height: 20,
-                width: double.infinity,
-                child: Marquee(
-                  text: _buildTickerText(),
-                  scrollAxis: Axis.horizontal,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  blankSpace: 80.0,
-                  velocity: 24.0,
-                  pauseAfterRound: const Duration(seconds: 1),
-                  startAfter: const Duration(seconds: 0),
-                  startPadding: 600.0,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    height: 1.0,
-                    overflow: TextOverflow.visible,
+              GestureDetector(
+                onTap: _showExpandedComments,
+                child: SizedBox(
+                  height: 20,
+                  width: double.infinity,
+                  child: Marquee(
+                    text: "${_buildTickerText()}   •   Tap to expand comments",
+                    scrollAxis: Axis.horizontal,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    blankSpace: 80.0,
+                    velocity: 24.0,
+                    pauseAfterRound: const Duration(seconds: 1),
+                    startAfter: const Duration(seconds: 0),
+                    startPadding: 600.0,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      height: 1.0,
+                      overflow: TextOverflow.visible,
+                    ),
                   ),
                 ),
               ),

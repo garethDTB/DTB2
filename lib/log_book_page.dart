@@ -144,8 +144,11 @@ class _LogBookPageState extends State<LogBookPage> {
                                 final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        SessionDetailsPage(session: session),
+                                    builder: (_) => SessionDetailsPage(
+                                      session: session,
+                                      numRows: 18,
+                                      numCols: 14,
+                                    ),
                                   ),
                                 );
 

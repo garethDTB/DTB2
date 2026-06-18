@@ -7,11 +7,22 @@ import 'models/session.dart';
 import 'services/api_service.dart';
 import 'auth_state.dart';
 import 'hold_utils.dart';
+import 'features/problem_detail/presentation/problem_detail_page.dart';
+import 'providers/problems_provider.dart';
 
 class SessionDetailsPage extends StatefulWidget {
   final Session session;
+  final int numRows;
+  final int numCols;
+  final List<String> superusers;
 
-  const SessionDetailsPage({super.key, required this.session});
+  const SessionDetailsPage({
+    super.key,
+    required this.session,
+    this.numRows = 18,
+    this.numCols = 14,
+    this.superusers = const [],
+  });
 
   @override
   State<SessionDetailsPage> createState() => _SessionDetailsPageState();
@@ -34,6 +45,64 @@ class _SessionDetailsPageState extends State<SessionDetailsPage>
     setState(() {
       gradeMode = prefs.getString("gradeMode") ?? "french";
     });
+  }
+
+  void _openProblemDetails(SentProblem sentProblem) {
+    final provider = context.read<ProblemsProvider>();
+
+    String cleanName(String value) {
+      return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+    }
+
+    final sessionProblemNames = _session.sent
+        .map((s) => cleanName(s.problem))
+        .toSet();
+
+    final sessionProblems = provider.allProblems.where((p) {
+      final name = cleanName(
+        p['name']?.toString() ??
+            p['Name']?.toString() ??
+            p['Problem']?.toString() ??
+            '',
+      );
+
+      return sessionProblemNames.contains(name);
+    }).toList();
+
+    final startIndex = sessionProblems.indexWhere((p) {
+      final name = cleanName(
+        p['name']?.toString() ??
+            p['Name']?.toString() ??
+            p['Problem']?.toString() ??
+            '',
+      );
+
+      return name == cleanName(sentProblem.problem);
+    });
+
+    if (startIndex == -1 || sessionProblems.isEmpty) {
+      _showMessage(
+        "Problems are still loading. Please try again in a moment.",
+        error: true,
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProblemDetailPage(
+          wallId: _session.wall,
+          problem: sessionProblems[startIndex],
+          problems: sessionProblems,
+          initialIndex: startIndex,
+          numRows: provider.numRows,
+          numCols: provider.numCols,
+          gradeMode: provider.gradeMode,
+          superusers: widget.superusers,
+        ),
+      ),
+    );
   }
 
   void _showMessage(String text, {bool error = false}) {
@@ -232,6 +301,7 @@ class _SessionDetailsPageState extends State<SessionDetailsPage>
                             ),
                             title: Text(_displayProblemName(s)),
                             subtitle: Text("Attempts: ${s.attempts}"),
+                            onTap: () => _openProblemDetails(s),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [

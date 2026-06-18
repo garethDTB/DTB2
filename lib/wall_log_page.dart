@@ -21,6 +21,7 @@ import 'services/websocket_service.dart';
 import 'log_book_page.dart';
 import 'models/session.dart';
 import 'mirror_utils.dart';
+import 'providers/problems_provider.dart';
 
 // ✅ Dropbox services
 import 'services/dropbox_auth_service.dart';
@@ -640,6 +641,8 @@ class _WallLogPageState extends State<WallLogPage>
     }
 
     final api = context.read<ApiService>();
+    final auth = context.read<AuthState>();
+    final provider = context.read<ProblemsProvider>();
 
     // Step 1: Info
     setState(() => _loadingMessage = "📋 Loading wall info...");
@@ -654,6 +657,8 @@ class _WallLogPageState extends State<WallLogPage>
     // Step 3: Test file
     setState(() => _loadingMessage = "✅ Finalizing...");
     await _refreshTestFile(wall);
+
+    await provider.load(wall, api, auth.username ?? "guest");
 
     // Step 4: Draft check
     final hasDrafts = await _hasDrafts(wall);
@@ -926,6 +931,20 @@ class _WallLogPageState extends State<WallLogPage>
                                 );
 
                                 if (changed == true && mounted) {
+                                  final api = context.read<ApiService>();
+                                  final auth = context.read<AuthState>();
+                                  final provider = context
+                                      .read<ProblemsProvider>();
+
+                                  await provider.load(
+                                    selectedWall!,
+                                    api,
+                                    auth.username ?? "guest",
+                                    forceRefresh: true,
+                                  );
+
+                                  if (!mounted) return;
+
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -978,11 +997,20 @@ class _WallLogPageState extends State<WallLogPage>
                             _menuButton(
                               label: "Log Book",
                               onPressed: () {
+                                final nearbyBoards = _boardsNearWall(
+                                  selectedWall!,
+                                );
+
+                                final centreWallIds = nearbyBoards
+                                    .map((w) => w['appName']!)
+                                    .toList();
+
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => LogBookAndLeaderboardPage(
                                       wallId: selectedWall!,
+                                      centreWallIds: centreWallIds,
                                     ),
                                   ),
                                 );
