@@ -26,6 +26,7 @@ import 'providers/problems_provider.dart';
 // ✅ Dropbox services
 import 'services/dropbox_auth_service.dart';
 import 'services/dropbox_file_service.dart';
+import 'services/ble_cast_service.dart';
 
 class WallLogPage extends StatefulWidget {
   const WallLogPage({super.key});
@@ -1029,6 +1030,7 @@ class _WallLogPageState extends State<WallLogPage>
                             ),
                           ],
 
+                          const SizedBox(height: 16),
                           // Always visible
                           _menuButton(
                             label: "Settings",

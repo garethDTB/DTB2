@@ -15,6 +15,8 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   String _gradeMode = "french";
   bool _autoSend = false;
+  String _castMethod = "websocket";
+  String _bluetoothMode = "auto";
 
   bool _showGuide = false;
   final List<bool> _expanded = List.filled(9, false);
@@ -38,7 +40,21 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _gradeMode = prefs.getString('gradeMode') ?? "french";
       _autoSend = prefs.getBool('autoSend') ?? false;
+      _castMethod = prefs.getString('castMethod') ?? "websocket";
+      _bluetoothMode = prefs.getString('bluetoothMode') ?? "auto";
     });
+  }
+
+  Future<void> _saveCastMethod(String method) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('castMethod', method);
+    setState(() => _castMethod = method);
+  }
+
+  Future<void> _saveBluetoothMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('bluetoothMode', mode);
+    setState(() => _bluetoothMode = mode);
   }
 
   Future<void> _saveGradeMode(String mode) async {
@@ -224,6 +240,84 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+
+          const SizedBox(height: 12),
+
+          Card(
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                const ListTile(
+                  title: Text("Cast Method"),
+                  subtitle: Text("Choose how problems are sent to the board"),
+                ),
+                RadioListTile<String>(
+                  title: const Text("Internet / WebSocket"),
+                  value: "websocket",
+                  groupValue: _castMethod,
+                  onChanged: (v) => _saveCastMethod(v!),
+                ),
+                RadioListTile<String>(
+                  title: const Text("Bluetooth nearby"),
+                  value: "bluetooth",
+                  groupValue: _castMethod,
+                  onChanged: (v) => _saveCastMethod(v!),
+                ),
+              ],
+            ),
+          ),
+
+          if (_castMethod == "bluetooth") ...[
+            const SizedBox(height: 12),
+
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  const ListTile(
+                    title: Text("Bluetooth Connection"),
+                    subtitle: Text("How long the board stays connected"),
+                  ),
+
+                  RadioListTile<String>(
+                    title: const Text("Exclusive"),
+                    subtitle: const Text(
+                      "Stay connected permanently (fastest)",
+                    ),
+                    value: "exclusive",
+                    groupValue: _bluetoothMode,
+                    onChanged: (v) => _saveBluetoothMode(v!),
+                  ),
+
+                  RadioListTile<String>(
+                    title: const Text("Auto Disconnect (30s)"),
+                    subtitle: const Text(
+                      "Disconnect 30 seconds after last cast",
+                    ),
+                    value: "auto",
+                    groupValue: _bluetoothMode,
+                    onChanged: (v) => _saveBluetoothMode(v!),
+                  ),
+
+                  RadioListTile<String>(
+                    title: const Text("Shared"),
+                    subtitle: const Text(
+                      "Disconnect 5 seconds after each cast",
+                    ),
+                    value: "shared",
+                    groupValue: _bluetoothMode,
+                    onChanged: (v) => _saveBluetoothMode(v!),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 12),
 

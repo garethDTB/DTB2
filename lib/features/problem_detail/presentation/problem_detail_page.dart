@@ -24,6 +24,7 @@ import 'widgets/action_buttons_row.dart';
 import 'widgets/swipe_hint_arrow.dart';
 import 'widgets/legend_bar.dart';
 import '../../../beta_videos_page.dart';
+import '../../../services/ble_cast_service.dart';
 
 bool _mirrorAvailable = false;
 bool _tickerVisible = true;
@@ -113,56 +114,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (autoSendToBoard) _sendToBoard();
     });
-  }
-
-  Color _gradeChipColor(String currentGrade, String suggestedGrade) {
-    const grades = [
-      '4',
-      '4+',
-      '5',
-      '5+',
-      '5a',
-      '5a+',
-      '5b',
-      '5b+',
-      '5c',
-      '5c+',
-      '6a',
-      '6a+',
-      '6b',
-      '6b+',
-      '6c',
-      '6c+',
-      '7a',
-      '7a+',
-      '7b',
-      '7b+',
-      '7c',
-      '7c+',
-      '8a',
-      '8a+',
-      '8b',
-      '8b+',
-      '8c',
-      '8c+',
-    ];
-
-    final currentIndex = grades.indexOf(currentGrade.trim());
-    final suggestedIndex = grades.indexOf(suggestedGrade.trim());
-
-    if (currentIndex == -1 || suggestedIndex == -1) {
-      return Colors.grey.shade200;
-    }
-
-    if (suggestedIndex == currentIndex) {
-      return Colors.green.shade200; // agrees
-    }
-
-    if (suggestedIndex > currentIndex) {
-      return Colors.orange.shade200; // thinks harder
-    }
-
-    return Colors.blue.shade200; // thinks easier
   }
 
   String _buildTickerText() {
@@ -296,17 +247,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                               ),
                             ),
 
-                            if (suggestedDisplay.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Chip(
-                                label: Text(suggestedDisplay),
-                                backgroundColor: _gradeChipColor(
-                                  problem['grade']?.toString() ?? '',
-                                  suggestedRaw,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ],
                             if (text.isNotEmpty) ...[
                               const SizedBox(height: 8),
                               Text(text),
@@ -743,25 +683,46 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     final problemName = (problem['name'] ?? '').toString();
     final auth = context.read<AuthState>();
     final user = auth.username ?? "guest";
+
     _updateSwipeMessage("Sending… please wait", Colors.orange);
+
     try {
       final prefs = await SharedPreferences.getInstance();
+      final castMethod = prefs.getString('castMethod') ?? "websocket";
+
+      if (castMethod == "bluetooth") {
+        await BleCastService().sendMessage({
+          "type": "cast_problem",
+          "user": user,
+          "problem": problemName,
+          "wallId": widget.wallId,
+          "mirrored": isMirrored,
+        });
+
+        _updateSwipeMessage("Sent by Bluetooth", Colors.green, clearAfter: 2);
+        return;
+      }
+
       final wallJson = prefs.getString('lastSelectedWall');
       if (wallJson == null) {
         _updateSwipeMessage("No wall info found", Colors.red, clearAfter: 2);
         return;
       }
+
       final wall = Map<String, dynamic>.from(jsonDecode(wallJson));
       final pos = await Geolocator.getCurrentPosition();
+
       final wallLat = double.tryParse(wall['lat'].toString()) ?? 0.0;
       final wallLon = double.tryParse(wall['lon'].toString()) ?? 0.0;
       final maxDistance = double.tryParse(wall['distance'].toString()) ?? 100.0;
+
       final distance = Geolocator.distanceBetween(
         pos.latitude,
         pos.longitude,
         wallLat,
         wallLon,
       );
+
       if (distance > maxDistance) {
         _updateSwipeMessage(
           "Too far from wall (${distance.toStringAsFixed(1)} m)",
@@ -770,12 +731,14 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
         );
         return;
       }
+
       ProblemUpdaterService.instance.sendProblem(
         user,
         problemName,
         isMirrored,
         widget.wallId,
       );
+
       Future.delayed(const Duration(seconds: 5), () {
         if (mounted && _swipeMessageColor == Colors.orange) {
           _updateSwipeMessage(

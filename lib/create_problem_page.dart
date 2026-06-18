@@ -15,7 +15,7 @@ import 'package:collection/collection.dart';
 import 'package:dtb2/services/hold_loader.dart';
 import 'services/problem_services.dart';
 import 'dart:math';
-
+import 'services/ble_cast_service.dart';
 // ---------------- ENUMS ----------------
 
 enum ConfirmStage { none, start1, start2, finish, feet, review }
@@ -174,7 +174,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     );
 
     _awaitingSendConfirm = true;
-    _sendPreviewToWall();
+    await _sendPreviewToWall();
 
     _sendConfirmTimer = Timer(const Duration(seconds: 5), () {
       if (!mounted) return;
@@ -657,21 +657,28 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
   // ---------------- PREVIEW TO WALL ----------------
 
-  void _sendPreviewToWall() {
+  Future<void> _sendPreviewToWall() async {
     final labels = selectionOrder
         .map((ws) => labelForWs(ws, cols, rows))
         .toList();
+
     if (labels.isEmpty) return;
 
-    if (kHoldDebug) {
-      final pairs = <String>[];
-      for (final ws in selectionOrder) {
-        pairs.add("${labelForWs(ws, cols, rows)}→hold$ws");
-      }
-      debugPrint("💡 PREVIEW  ${pairs.join(', ')}");
-    }
-
     final message = "New problem being created by ${labels.join(" ")}";
+
+    final prefs = await SharedPreferences.getInstance();
+    final castMethod = prefs.getString('castMethod') ?? "websocket";
+
+    if (castMethod == "bluetooth") {
+      await BleCastService().sendMessage({
+        "type": "preview_problem",
+        "wallId": widget.wallId,
+        "problem": message,
+        "holds": labels,
+        "mirrored": false,
+      });
+      return;
+    }
 
     ProblemUpdaterService.instance.sendProblem(
       "",
