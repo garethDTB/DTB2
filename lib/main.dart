@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:flutter/services.dart';
 import 'auth_state.dart';
 import 'app_state.dart';
 import 'login_page.dart';
@@ -31,6 +31,11 @@ Future<void> clearAllWallData() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   if (kDebugMode) await clearAllWallData();
 
