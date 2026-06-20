@@ -74,6 +74,8 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
   double baseWidth = 1150.0;
   double baseHeight = 750.0;
   bool autoSend = false;
+  String? _swipeMessage;
+  Color _swipeMessageColor = Colors.black87;
   Timer? _sendConfirmTimer;
   bool _awaitingSendConfirm = false;
   final Set<int> selected = {};
@@ -99,6 +101,21 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
   late DraftService draftService; // 👈 new service
 
   static const bool kHoldDebug = true;
+
+  void _updateSwipeMessage(String msg, Color bg, {int clearAfter = 0}) {
+    setState(() {
+      _swipeMessage = msg;
+      _swipeMessageColor = bg;
+    });
+
+    if (clearAfter > 0) {
+      Future.delayed(Duration(seconds: clearAfter), () {
+        if (mounted && _swipeMessage == msg) {
+          setState(() => _swipeMessage = null);
+        }
+      });
+    }
+  }
 
   void _debugHoldTap(String label) {
     if (!kHoldDebug) return;
@@ -165,13 +182,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     _sendConfirmTimer?.cancel();
     _sendConfirmTimer = null;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("📡 Sending to board…"),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 3),
-      ),
-    );
+    _updateSwipeMessage("Sending… please wait", Colors.orange);
 
     _awaitingSendConfirm = true;
     await _sendPreviewToWall();
@@ -180,13 +191,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
       if (!mounted) return;
       if (_awaitingSendConfirm) {
         _awaitingSendConfirm = false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("⚠️ Send failed (timeout)"),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        _updateSwipeMessage("Send failed (timeout)", Colors.red, clearAfter: 3);
       }
     });
   }
@@ -224,12 +229,10 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
           _sendConfirmTimer?.cancel();
           _sendConfirmTimer = null;
           _awaitingSendConfirm = false;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("✅ Sent to board successfully"),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
+          _updateSwipeMessage(
+            "Sent to board successfully",
+            Colors.green,
+            clearAfter: 2,
           );
         }
       }
@@ -670,14 +673,27 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     final castMethod = prefs.getString('castMethod') ?? "websocket";
 
     if (castMethod == "bluetooth") {
-      await BleCastService().sendMessage({
-        "type": "preview_problem",
-        "wallId": widget.wallId,
-        "problem": message,
-        "holds": labels,
-        "mirrored": false,
-      });
-      return;
+      try {
+        await BleCastService().sendMessage({
+          "type": "preview_problem",
+          "wallId": widget.wallId,
+          "problem": message,
+          "holds": labels,
+          "mirrored": false,
+        }, boardName: "DTB Board ${widget.wallId}");
+
+        return;
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Bluetooth unavailable — sent via Cloud Connection instead",
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
 
     ProblemUpdaterService.instance.sendProblem(
@@ -1168,6 +1184,29 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                   ),
 
                   LegendBar(footMode: footMode),
+
+                  SizedBox(
+                    height: 40,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: _swipeMessage != null
+                          ? Container(
+                              key: const ValueKey('banner'),
+                              width: double.infinity,
+                              color: _swipeMessageColor,
+                              alignment: Alignment.center,
+                              child: Text(
+                                _swipeMessage!,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+
                   const SizedBox(height: 14),
                 ],
               ),

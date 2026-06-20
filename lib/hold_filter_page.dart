@@ -7,6 +7,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 
 import 'hold_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'services/ble_cast_service.dart';
+import 'services/websocket_service.dart';
 
 class HoldFilterPage extends StatefulWidget {
   final String wallId;
@@ -34,12 +37,80 @@ class _HoldFilterPageState extends State<HoldFilterPage> {
   List<HoldPoint> holds = [];
   final Set<int> selectedWs = {};
   late bool matchAll;
+  String? _swipeMessage;
+  Color _swipeMessageColor = Colors.black87;
+
+  void _updateSwipeMessage(String msg, Color bg, {int clearAfter = 0}) {
+    setState(() {
+      _swipeMessage = msg;
+      _swipeMessageColor = bg;
+    });
+
+    if (clearAfter > 0) {
+      Future.delayed(Duration(seconds: clearAfter), () {
+        if (mounted && _swipeMessage == msg) {
+          setState(() => _swipeMessage = null);
+        }
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     matchAll = widget.matchAll;
     _loadEverything();
+  }
+
+  Future<void> _castSelectedHolds() async {
+    final labels = selectedWs.map((ws) => labelForWs(ws, cols, rows)).toList()
+      ..sort();
+
+    if (labels.isEmpty) return;
+
+    final message = "New problem being created by ${labels.join(" ")}";
+
+    final prefs = await SharedPreferences.getInstance();
+    final castMethod = prefs.getString('castMethod') ?? "websocket";
+
+    _updateSwipeMessage("Sending… please wait", Colors.orange);
+
+    if (castMethod == "bluetooth") {
+      try {
+        await BleCastService().sendMessage({
+          "type": "preview_problem",
+          "wallId": widget.wallId,
+          "problem": message,
+          "holds": labels,
+          "mirrored": false,
+        }, boardName: "DTB Board ${widget.wallId}");
+
+        if (!mounted) return;
+        _updateSwipeMessage("Sent by Bluetooth", Colors.green, clearAfter: 2);
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        _updateSwipeMessage(
+          "Bluetooth unavailable — sent via Cloud Connection instead",
+          Colors.orange,
+          clearAfter: 3,
+        );
+      }
+    }
+
+    ProblemUpdaterService.instance.sendProblem(
+      "",
+      message,
+      false,
+      widget.wallId,
+    );
+
+    if (!mounted) return;
+    _updateSwipeMessage(
+      "Sent by Cloud Connection",
+      Colors.green,
+      clearAfter: 2,
+    );
   }
 
   Future<void> _loadEverything() async {
@@ -110,7 +181,7 @@ class _HoldFilterPageState extends State<HoldFilterPage> {
     }
   }
 
-  void _toggleHold(String label) {
+  void _toggleHold(String label) async {
     final ws = tryWsIndexFromLabel(label, cols, rows);
     if (ws == null) return;
 
@@ -121,6 +192,13 @@ class _HoldFilterPageState extends State<HoldFilterPage> {
         selectedWs.add(ws);
       }
     });
+
+    final prefs = await SharedPreferences.getInstance();
+    final autoSend = prefs.getBool('autoSend') ?? false;
+
+    if (autoSend && selectedWs.isNotEmpty) {
+      await _castSelectedHolds();
+    }
   }
 
   void _apply() {
@@ -150,6 +228,12 @@ class _HoldFilterPageState extends State<HoldFilterPage> {
             onPressed: _clear,
           ),
           IconButton(
+            tooltip: "Cast selected holds",
+            icon: const Icon(Icons.lightbulb_outline, color: Colors.blue),
+            onPressed: _castSelectedHolds,
+          ),
+
+          IconButton(
             tooltip: "Apply",
             icon: const Icon(Icons.check),
             onPressed: _apply,
@@ -165,8 +249,8 @@ class _HoldFilterPageState extends State<HoldFilterPage> {
               color: Colors.grey.shade100,
               child: Text(
                 selectedWs.isEmpty
-                    ? "Tap holds to filter problems"
-                    : "Selected ${selectedWs.length}: ${selectedLabels.join(', ')}",
+                    ? "Tap holds to filter problems, no holds selected"
+                    : "${selectedWs.length} hold${selectedWs.length == 1 ? '' : 's'} selected",
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -198,21 +282,28 @@ class _HoldFilterPageState extends State<HoldFilterPage> {
                       wallImageFile: wallImageFile,
                     ),
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: ElevatedButton.icon(
-            onPressed: _apply,
-            icon: const Icon(Icons.filter_alt),
-            label: Text(
-              selectedWs.isEmpty
-                  ? "Show all problems"
-                  : "Apply ${matchAll ? 'AND' : 'OR'} filter (${selectedWs.length})",
+            SizedBox(
+              height: 40,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _swipeMessage != null
+                    ? Container(
+                        key: const ValueKey('banner'),
+                        width: double.infinity,
+                        color: _swipeMessageColor,
+                        alignment: Alignment.center,
+                        child: Text(
+                          _swipeMessage!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

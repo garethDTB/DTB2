@@ -691,16 +691,24 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
       final castMethod = prefs.getString('castMethod') ?? "websocket";
 
       if (castMethod == "bluetooth") {
-        await BleCastService().sendMessage({
-          "type": "cast_problem",
-          "user": user,
-          "problem": problemName,
-          "wallId": widget.wallId,
-          "mirrored": isMirrored,
-        });
+        try {
+          await BleCastService().sendMessage({
+            "type": "cast_problem",
+            "user": user,
+            "problem": problemName,
+            "wallId": widget.wallId,
+            "mirrored": isMirrored,
+          }, boardName: "DTB Board ${widget.wallId}");
 
-        _updateSwipeMessage("Sent by Bluetooth", Colors.green, clearAfter: 2);
-        return;
+          _updateSwipeMessage("Sent by Bluetooth", Colors.green, clearAfter: 2);
+          return;
+        } catch (e) {
+          _updateSwipeMessage(
+            "Bluetooth unavailable — sent via Cloud Connection instead",
+            Colors.orange,
+            clearAfter: 3,
+          );
+        }
       }
 
       final wallJson = prefs.getString('lastSelectedWall');

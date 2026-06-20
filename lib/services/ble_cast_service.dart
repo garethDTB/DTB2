@@ -11,17 +11,21 @@ class BleCastService {
 
   static BluetoothDevice? _device;
   static BluetoothCharacteristic? _castChar;
+  static String? _connectedBoardName;
 
   static bool _isConnecting = false;
   static bool _isWriting = false;
 
   static Timer? _disconnectTimer;
 
-  Future<void> sendTestMessage() async {
-    await sendMessage({"problem": "test"});
+  Future<void> sendTestMessage({required String boardName}) async {
+    await sendMessage({"problem": "test"}, boardName: boardName);
   }
 
-  Future<void> sendMessage(Map<String, dynamic> message) async {
+  Future<void> sendMessage(
+    Map<String, dynamic> message, {
+    required String boardName,
+  }) async {
     if (_isWriting) {
       print("⚠️ BLE write already running, ignoring duplicate");
       return;
@@ -30,13 +34,13 @@ class BleCastService {
     _isWriting = true;
 
     try {
-      final char = await _getCastCharacteristic();
+      final char = await _getCastCharacteristic(boardName);
 
       final payload = utf8.encode(jsonEncode(message));
 
       await char.write(payload, withoutResponse: false);
 
-      print("✅ BLE message sent");
+      print("✅ BLE message sent to $boardName");
 
       await _handleDisconnectMode();
     } catch (e) {
@@ -44,6 +48,7 @@ class BleCastService {
 
       _device = null;
       _castChar = null;
+      _connectedBoardName = null;
       _disconnectTimer?.cancel();
 
       rethrow;
@@ -73,8 +78,12 @@ class BleCastService {
     _disconnectTimer = Timer(const Duration(seconds: 30), () => disconnect());
   }
 
-  Future<BluetoothCharacteristic> _getCastCharacteristic() async {
-    if (_device != null && _castChar != null) {
+  Future<BluetoothCharacteristic> _getCastCharacteristic(
+    String boardName,
+  ) async {
+    if (_device != null &&
+        _castChar != null &&
+        _connectedBoardName == boardName) {
       final connected = await _isDeviceConnected(_device!);
 
       if (connected) {
@@ -83,6 +92,12 @@ class BleCastService {
 
       _device = null;
       _castChar = null;
+      _connectedBoardName = null;
+    }
+
+    if (_device != null && _connectedBoardName != boardName) {
+      print("🔁 Switching BLE board from $_connectedBoardName to $boardName");
+      await disconnect();
     }
 
     if (_isConnecting) {
@@ -90,7 +105,9 @@ class BleCastService {
         await Future.delayed(const Duration(milliseconds: 100));
       }
 
-      if (_device != null && _castChar != null) {
+      if (_device != null &&
+          _castChar != null &&
+          _connectedBoardName == boardName) {
         final connected = await _isDeviceConnected(_device!);
         if (connected) {
           return _castChar!;
@@ -101,7 +118,7 @@ class BleCastService {
     _isConnecting = true;
 
     try {
-      print("📡 BLE connecting to DTB Board...");
+      print("📡 BLE connecting to $boardName...");
 
       final isSupported = await FlutterBluePlus.isSupported;
       if (!isSupported) {
@@ -126,19 +143,19 @@ class BleCastService {
         targetDevice = await FlutterBluePlus.scanResults
             .expand((results) => results)
             .where((result) {
-              final name = result.device.platformName;
-              return name.contains("DTB Board");
+              final name = result.device.platformName.trim();
+              return name == boardName;
             })
             .map((result) => result.device)
             .first
             .timeout(const Duration(seconds: 5));
       } on TimeoutException {
-        throw Exception("No DTB Board found nearby.");
+        throw Exception("No $boardName found nearby.");
       } finally {
         await FlutterBluePlus.stopScan();
       }
 
-      print("✅ Found DTB Board: ${targetDevice.platformName}");
+      print("✅ Found board: ${targetDevice.platformName}");
 
       await targetDevice.connect(
         license: License.free,
@@ -167,8 +184,9 @@ class BleCastService {
 
       _device = targetDevice;
       _castChar = foundChar;
+      _connectedBoardName = boardName;
 
-      print("✅ BLE ready and kept connected");
+      print("✅ BLE ready and kept connected to $boardName");
 
       return foundChar;
     } finally {
@@ -191,5 +209,6 @@ class BleCastService {
 
     _device = null;
     _castChar = null;
+    _connectedBoardName = null;
   }
 }
