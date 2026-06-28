@@ -1049,6 +1049,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
   }
 
   Future<void> _showListsMenu() async {
+    final provider = context.read<ProblemsProvider>();
     await showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -1138,6 +1139,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                     onTap: () {
                       setState(() {
                         _selectedList = list;
+                        provider.selectedSort = ProblemSortType.savedOrder;
                       });
                       Navigator.pop(context);
                     },
@@ -1164,6 +1166,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                     onTap: () {
                       setState(() {
                         _selectedList = list;
+                        provider.selectedSort = ProblemSortType.savedOrder;
                       });
                       Navigator.pop(context);
                     },
@@ -1202,12 +1205,20 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(
+              ListTile(
                 title: Text(
-                  "Sort problems",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  _selectedList != null ? "Sort list" : "Sort problems",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
+              if (_selectedList != null)
+                _sortOption(
+                  provider,
+                  "Saved order",
+                  ProblemSortType.savedOrder,
+                  availableGrades,
+                ),
+
               _sortOption(
                 provider,
                 "Grade",
@@ -1598,15 +1609,68 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         (_selectedList!['Problems'] as List? ?? []),
       );
 
-      displayedProblems.sort((a, b) {
-        final aIndex = listProblems.indexWhere(
-          (p) => p['Problem'] == a['name'],
-        );
-        final bIndex = listProblems.indexWhere(
-          (p) => p['Problem'] == b['name'],
-        );
-        return aIndex.compareTo(bIndex);
-      });
+      switch (provider.selectedSort) {
+        case ProblemSortType.savedOrder:
+          displayedProblems.sort((a, b) {
+            final aIndex = listProblems.indexWhere(
+              (p) => p['Problem'] == a['name'],
+            );
+            final bIndex = listProblems.indexWhere(
+              (p) => p['Problem'] == b['name'],
+            );
+            return aIndex.compareTo(bIndex);
+          });
+          break;
+
+        case ProblemSortType.grade:
+          displayedProblems.sort((a, b) {
+            final gA = a['grade'] ?? '';
+            final gB = b['grade'] ?? '';
+            final cmp = provider.gradeSort(gA, gB);
+            if (cmp != 0) return cmp;
+
+            final popA = (a['ticks'] ?? 0) + (a['likesCount'] ?? 0);
+            final popB = (b['ticks'] ?? 0) + (b['likesCount'] ?? 0);
+            return popB.compareTo(popA);
+          });
+          break;
+
+        case ProblemSortType.newest:
+          displayedProblems.sort(
+            (a, b) => (b['orderIndex'] ?? 0).compareTo(a['orderIndex'] ?? 0),
+          );
+          break;
+
+        case ProblemSortType.oldest:
+          displayedProblems.sort(
+            (a, b) => (a['orderIndex'] ?? 0).compareTo(b['orderIndex'] ?? 0),
+          );
+          break;
+
+        case ProblemSortType.mostAscents:
+          displayedProblems.sort(
+            (a, b) => (b['ticks'] ?? 0).compareTo(a['ticks'] ?? 0),
+          );
+          break;
+
+        case ProblemSortType.leastAscents:
+          displayedProblems.sort(
+            (a, b) => (a['ticks'] ?? 0).compareTo(b['ticks'] ?? 0),
+          );
+          break;
+
+        case ProblemSortType.mostLikes:
+          displayedProblems.sort(
+            (a, b) => (b['likesCount'] ?? 0).compareTo(a['likesCount'] ?? 0),
+          );
+          break;
+
+        case ProblemSortType.leastLikes:
+          displayedProblems.sort(
+            (a, b) => (a['likesCount'] ?? 0).compareTo(b['likesCount'] ?? 0),
+          );
+          break;
+      }
 
       Future<void> saveListOrder() async {
         final updatedProblems = displayedProblems.asMap().entries.map((entry) {

@@ -703,6 +703,8 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
           _updateSwipeMessage("Sent by Bluetooth", Colors.green, clearAfter: 2);
           return;
         } catch (e) {
+          debugPrint("❌ Bluetooth send failed: $e");
+
           _updateSwipeMessage(
             "Bluetooth unavailable — sent via Cloud Connection instead",
             Colors.orange,
@@ -849,15 +851,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
 
       if (!mounted) return;
 
-      if (myLists.isEmpty) {
-        _updateSwipeMessage(
-          "Create a list first",
-          Colors.orange,
-          clearAfter: 2,
-        );
-        return;
-      }
-
       showModalBottomSheet(
         context: context,
         builder: (sheetContext) {
@@ -872,6 +865,19 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
+
+                ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text("Create new list"),
+                  subtitle: const Text("Create a list with this climb in it"),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showCreateListFromDetailsDialog();
+                  },
+                ),
+
+                if (myLists.isNotEmpty) const Divider(),
+
                 ...myLists.map((list) {
                   final count = (list['Problems'] as List? ?? []).length;
 
@@ -893,6 +899,128 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     } catch (e) {
       debugPrint("❌ Failed to load my lists: $e");
       _updateSwipeMessage("Failed to load lists", Colors.red, clearAfter: 2);
+    }
+  }
+
+  Future<void> _showCreateListFromDetailsDialog() async {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    bool isPublic = true;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Create new list"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: "List name",
+                      hintText: "Warm-up set",
+                    ),
+                  ),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: "Description",
+                      hintText: "Optional",
+                    ),
+                  ),
+                  SwitchListTile(
+                    value: isPublic,
+                    title: const Text("Public list"),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isPublic = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    await _createListWithCurrentProblem(
+                      title: title,
+                      description: descriptionController.text.trim(),
+                      isPublic: isPublic,
+                    );
+
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text("Create"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _createListWithCurrentProblem({
+    required String title,
+    required String description,
+    required bool isPublic,
+  }) async {
+    final api = context.read<ApiService>();
+    final auth = context.read<AuthState>();
+
+    final username = (auth.username ?? '').trim();
+    final displayName = auth.displayName ?? username;
+
+    if (username.isEmpty || username == "guest") return;
+
+    final problem = widget.problems[currentIndex];
+
+    final problemId = (problem['id'] ?? '').toString();
+    final problemName = (problem['name'] ?? '').toString();
+    final grade = (problem['grade'] ?? '').toString();
+
+    final problems = [
+      {
+        "ProblemId": problemId,
+        "Problem": problemName,
+        "Grade": grade,
+        "Order": 1,
+        "Note": "",
+      },
+    ];
+
+    try {
+      await api.createList(
+        wallId: widget.wallId,
+        username: username,
+        displayName: displayName,
+        title: title,
+        description: description,
+        isPublic: isPublic,
+        problems: problems,
+      );
+
+      _updateSwipeMessage(
+        "Created list and added climb",
+        Colors.green,
+        clearAfter: 2,
+      );
+
+      HapticFeedback.selectionClick();
+    } catch (e) {
+      debugPrint("❌ Failed to create list from details: $e");
+      _updateSwipeMessage("Failed to create list", Colors.red, clearAfter: 2);
     }
   }
 
@@ -960,9 +1088,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
         clearAfter: 2,
       );
       HapticFeedback.selectionClick();
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
     } catch (e) {
       debugPrint("❌ Failed to add problem to list: $e");
       _updateSwipeMessage("Failed to add to list", Colors.red, clearAfter: 2);

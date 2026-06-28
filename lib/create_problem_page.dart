@@ -102,6 +102,32 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
 
   static const bool kHoldDebug = true;
 
+  String get _createStatusTitle {
+    if (confirmStage == ConfirmStage.none) {
+      return selectionOrder.isEmpty
+          ? "Create a Problem"
+          : "${selectionOrder.length} holds selected";
+    }
+
+    if (confirmStage == ConfirmStage.start1) return "Choose Start Hold";
+    if (confirmStage == ConfirmStage.start2) return "Choose Second Start";
+    if (confirmStage == ConfirmStage.finish) return "Choose Finish Hold";
+    if (confirmStage == ConfirmStage.feet) return "Choose Feet";
+    if (confirmStage == ConfirmStage.review) return "Ready to Save";
+
+    return "Create a Problem";
+  }
+
+  String get _createStatusMessage {
+    if (confirmStage == ConfirmStage.none) {
+      return selectionOrder.isEmpty
+          ? "Tap holds in any order."
+          : "Keep adding holds, or tap Next to choose Start and Finish.";
+    }
+
+    return confirmLabel;
+  }
+
   void _updateSwipeMessage(String msg, Color bg, {int clearAfter = 0}) {
     setState(() {
       _swipeMessage = msg;
@@ -496,7 +522,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     feetSelected.clear();
     footMode1TokensSelected = [];
     confirmStage = ConfirmStage.start1;
-    confirmLabel = "Confirm Start hold (tap one of your selected holds)";
+    confirmLabel = "Tap the START hold";
     setState(() {});
   }
 
@@ -506,12 +532,11 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
     if (confirmStage == ConfirmStage.start1) {
       cStart1 = ws;
       confirmStage = ConfirmStage.start2;
-      confirmLabel =
-          "Confirm second Start: tap same again for one-handed, or another for two-handed";
+      confirmLabel = "Tap same hold again, or another start hold";
     } else if (confirmStage == ConfirmStage.start2) {
       cStart2 = ws;
       confirmStage = ConfirmStage.finish;
-      confirmLabel = "Confirm Finish hold";
+      confirmLabel = "Tap the FINISH hold";
     } else if (confirmStage == ConfirmStage.finish) {
       if (ws == cStart1 || ws == cStart2) {
         confirmLabel = "! Finish cannot be the same as a Start hold";
@@ -523,7 +548,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
               "Select FEET holds (yellow). Tap blue holds to toggle, then press ✓";
         } else {
           confirmStage = ConfirmStage.review;
-          confirmLabel = "Review selection and press Save";
+          confirmLabel = "Review selection and press Next to save";
         }
       }
     }
@@ -1028,34 +1053,6 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
       appBar: AppBar(
         title: Text(widget.isEditing ? 'Edit Problem' : 'Create Problem'),
         actions: [
-          IconButton(
-            tooltip: "Clear",
-            icon: const Icon(Icons.clear_all),
-            onPressed: clearSelection,
-          ),
-          IconButton(
-            tooltip: "Send to Wall",
-            icon: const Icon(Icons.lightbulb_outline, color: Colors.blue),
-            onPressed: () => _sendToBoardWithFeedback(),
-          ),
-          IconButton(
-            tooltip: confirmStage == ConfirmStage.feet ? "Done Feet" : "Save",
-            icon: Icon(
-              confirmStage == ConfirmStage.feet ? Icons.check : Icons.save,
-            ),
-            onPressed: () {
-              if (confirmStage == ConfirmStage.feet) {
-                proceedFromFeetToReview();
-                openReviewDialog(context);
-              } else if (confirmStage == ConfirmStage.review) {
-                openReviewDialog(context);
-              } else {
-                beginConfirmation();
-              }
-            },
-          ),
-
-          // 👇 Delete button (only when editing)
           if (widget.isEditing)
             IconButton(
               tooltip: "Delete Problem",
@@ -1087,6 +1084,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                 if (confirm == true) {
                   final api = context.read<ApiService>();
                   final row = widget.problemRow;
+
                   if (row != null) {
                     String? oldId = row[0].toString();
 
@@ -1105,7 +1103,6 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                     if (oldId != null && oldId.isNotEmpty) {
                       try {
                         await api.deleteProblem(widget.wallId, oldId);
-                        debugPrint("🗑️ Deleted problem $oldId");
 
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1114,7 +1111,7 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                               backgroundColor: Colors.red,
                             ),
                           );
-                          Navigator.pop(context, true); // close after delete
+                          Navigator.pop(context, true);
                         }
                       } catch (e) {
                         debugPrint("⚠️ Delete failed: $e");
@@ -1135,31 +1132,13 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
               absorbing: _isSavingProblem,
               child: Column(
                 children: [
-                  Container(
-                    height: 40,
-                    width: double.infinity,
-                    color: confirmStage == ConfirmStage.none
-                        ? Colors.grey.shade100
-                        : Colors.yellow.shade100,
-                    alignment: Alignment.centerLeft,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        (confirmStage == ConfirmStage.none)
-                            ? (selectionOrder.isEmpty
-                                  ? "Please select holds"
-                                  : "Selected ${selectionOrder.length} — tap Save to confirm start/finish")
-                            : confirmLabel,
-                        style: TextStyle(
-                          color: confirmLabel.startsWith('!')
-                              ? Colors.red
-                              : Colors.black87,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
+                  CreateProblemStatusCard(
+                    title: _createStatusTitle,
+                    message: _createStatusMessage,
+                    isWarning: confirmLabel.startsWith('!'),
+                    selectedCount: selectionOrder.length,
+                    startChosen: cStart1 != null,
+                    finishChosen: cFinish != null,
                   ),
 
                   Expanded(
@@ -1183,7 +1162,16 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                           ),
                   ),
 
-                  LegendBar(footMode: footMode),
+                  LegendBar(
+                    footMode: footMode,
+                    selectedCount: selectionOrder.length,
+                    startCount: [
+                      if (cStart1 != null) cStart1,
+                      if (cStart2 != null && cStart2 != cStart1) cStart2,
+                    ].length,
+                    finishCount: cFinish == null ? 0 : 1,
+                    feetCount: feetSelected.length,
+                  ),
 
                   SizedBox(
                     height: 40,
@@ -1207,7 +1195,21 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  CreateProblemActionBar(
+                    isFeetStage: confirmStage == ConfirmStage.feet,
+                    onStartAgain: clearSelection,
+                    onPreview: _sendToBoardWithFeedback,
+                    onSave: () {
+                      if (confirmStage == ConfirmStage.feet) {
+                        proceedFromFeetToReview();
+                        openReviewDialog(context);
+                      } else if (confirmStage == ConfirmStage.review) {
+                        openReviewDialog(context);
+                      } else {
+                        beginConfirmation();
+                      }
+                    },
+                  ),
                 ],
               ),
             ),
@@ -1448,14 +1450,7 @@ class _HoldButton extends StatelessWidget {
           ),
 
           if (color != null) ...[
-            Container(
-              width: baseCircle,
-              height: baseCircle,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 4),
-              ),
-            ),
+            Container(width: baseCircle, height: baseCircle),
             Container(
               width: baseCircle - 6,
               height: baseCircle - 6,
@@ -1475,26 +1470,43 @@ class _HoldButton extends StatelessWidget {
 
 class LegendBar extends StatelessWidget {
   final int footMode;
-  const LegendBar({super.key, required this.footMode});
+  final int selectedCount;
+  final int startCount;
+  final int finishCount;
+  final int feetCount;
+
+  const LegendBar({
+    super.key,
+    required this.footMode,
+    required this.selectedCount,
+    required this.startCount,
+    required this.finishCount,
+    required this.feetCount,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final handCount = selectedCount - startCount - finishCount - feetCount;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 12,
+        runSpacing: 6,
         children: [
-          _legendDot(Colors.green, "Start"),
-          _legendDot(Colors.red, "Finish"),
-          _legendDot(Colors.blue, "Intermediate"),
-          if (footMode == 2) _legendDot(Colors.yellow, "Feet"),
+          _legendDot(Colors.green, "Start", startCount),
+          _legendDot(Colors.blue, "Hands", handCount < 0 ? 0 : handCount),
+          _legendDot(Colors.red, "Finish", finishCount),
+          if (footMode == 2) _legendDot(Colors.yellow, "Feet", feetCount),
         ],
       ),
     );
   }
 
-  Widget _legendDot(Color color, String text) => Row(
+  Widget _legendDot(Color color, String text, int count) => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
       Container(
         width: 14,
@@ -1506,9 +1518,129 @@ class LegendBar extends StatelessWidget {
         ),
       ),
       const SizedBox(width: 6),
-      Text(text, style: const TextStyle(fontSize: 13)),
+      Text("$text ($count)", style: const TextStyle(fontSize: 13)),
     ],
   );
+}
+
+class CreateProblemActionBar extends StatelessWidget {
+  final bool isFeetStage;
+  final VoidCallback onStartAgain;
+  final VoidCallback onPreview;
+  final VoidCallback onSave;
+
+  const CreateProblemActionBar({
+    super.key,
+    required this.isFeetStage,
+    required this.onStartAgain,
+    required this.onPreview,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text("Start Again"),
+              onPressed: onStartAgain,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: onPreview,
+              child: const Icon(Icons.cast),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: Icon(isFeetStage ? Icons.check : Icons.save),
+              label: Text(isFeetStage ? "Done" : "Next"),
+              onPressed: onSave,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CreateProblemStatusCard extends StatelessWidget {
+  final String title;
+  final String message;
+  final bool isWarning;
+  final int selectedCount;
+  final bool startChosen;
+  final bool finishChosen;
+
+  const CreateProblemStatusCard({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.isWarning,
+    required this.selectedCount,
+    required this.startChosen,
+    required this.finishChosen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: isWarning ? Colors.red.shade700 : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              message,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: isWarning ? Colors.red.shade700 : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusChip(bool done, String label) {
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        done ? Icons.check_circle : Icons.radio_button_unchecked,
+        size: 16,
+        color: done ? Colors.green : Colors.grey,
+      ),
+      label: Text(label),
+    );
+  }
 }
 
 // ---------------- CONFIRM REVIEW ----------------
@@ -1531,17 +1663,17 @@ class ConfirmReviewDialog extends StatelessWidget {
         children: const [
           Icon(Icons.help_outline, color: Colors.blue),
           SizedBox(width: 8),
-          Text("Confirm Selection"),
+          Text("Check Start and Finish"),
         ],
       ),
       content: const Text(
-        "Are you happy with your chosen holds?",
+        "If the Start and Finish holds look right, continue to name and save the problem.",
         style: TextStyle(fontSize: 15),
       ),
       actions: [
         TextButton.icon(
           icon: const Icon(Icons.arrow_back),
-          label: const Text("Back"),
+          label: const Text("Change"),
           onPressed: onBack,
         ),
         ElevatedButton.icon(

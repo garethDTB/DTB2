@@ -66,6 +66,34 @@ class _WallLogPageState extends State<WallLogPage>
 
   // ---------------- HELPERS ----------------
 
+  List<Map<String, String>> _boardsNearUser({double radiusMeters = 100}) {
+    if (_userPosition == null) return [];
+
+    final nearby = walls.where((w) {
+      final lat = double.tryParse(w['lat'] ?? '');
+      final lon = double.tryParse(w['lon'] ?? '');
+      if (lat == null || lon == null) return false;
+
+      final distance = Geolocator.distanceBetween(
+        _userPosition!.latitude,
+        _userPosition!.longitude,
+        lat,
+        lon,
+      );
+
+      w['computedDistance'] = distance.toString();
+      return distance <= radiusMeters;
+    }).toList();
+
+    nearby.sort((a, b) {
+      final da = double.tryParse(a['computedDistance'] ?? '9999999') ?? 9999999;
+      final db = double.tryParse(b['computedDistance'] ?? '9999999') ?? 9999999;
+      return da.compareTo(db);
+    });
+
+    return nearby;
+  }
+
   List<Map<String, String>> _boardsNearWall(String wallId) {
     final selected = _findWall(wallId);
     if (selected == null) return [];
@@ -217,9 +245,7 @@ class _WallLogPageState extends State<WallLogPage>
   }
 
   List<DropdownMenuItem<String>> _buildWallDropdownItems() {
-    final nearestGroup = _highlightWall == null
-        ? <Map<String, String>>[]
-        : _boardsNearWall(_highlightWall!);
+    final nearestGroup = _boardsNearUser(radiusMeters: 100);
 
     final nearestIds = nearestGroup
         .map((w) => w['appName'])
@@ -356,9 +382,14 @@ class _WallLogPageState extends State<WallLogPage>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && selectedWall != null) {
-      _refreshDraftsStatus();
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      await _getUserLocation();
+      await _loadWalls();
+
+      if (selectedWall != null) {
+        _refreshDraftsStatus();
+      }
     }
   }
 
@@ -506,15 +537,28 @@ class _WallLogPageState extends State<WallLogPage>
   /// ✅ Load last wall from prefs
   Future<void> _loadLastWall() async {
     final savedWall = _prefs?.getString('lastSelectedWall');
-    if (savedWall == null) return;
+    if (savedWall == null || savedWall.isEmpty) return;
+
     try {
       final wallData = jsonDecode(savedWall) as Map<String, dynamic>;
       final wallId = wallData['appName'] as String?;
-      if (wallId != null && wallId.isNotEmpty) {
-        _enterWall(wallId);
+
+      if (wallId == null || wallId.isEmpty) return;
+
+      final wallStillExists = walls.any((w) => w['appName'] == wallId);
+
+      if (!wallStillExists) {
+        debugPrint(
+          "⚠️ Saved wall '$wallId' not found. Clearing lastSelectedWall.",
+        );
+        await _prefs?.remove('lastSelectedWall');
+        return;
       }
+
+      await _enterWall(wallId);
     } catch (e) {
-      debugPrint("⚠️ Failed to decode lastSelectedWall: $e");
+      debugPrint("⚠️ Failed to load saved wall: $e");
+      await _prefs?.remove('lastSelectedWall');
     }
   }
 
@@ -569,25 +613,88 @@ class _WallLogPageState extends State<WallLogPage>
     }
   }
 
+  Future<String> _getSettingsVersion(File settingsFile) async {
+    if (!await settingsFile.exists()) return "";
+
+    try {
+      final lines = await settingsFile.readAsLines();
+
+      for (final line in lines) {
+        if (line.startsWith("Version=")) {
+          return line.substring(8).trim();
+        }
+      }
+    } catch (_) {}
+
+    return "";
+  }
+
   /// ✅ Dropbox assets fetch
   Future<void> _tryFetchOrCacheWallAssets(String wallId) async {
+    // Local Settings file
+    final localSettings = await _getLocalWallFile(wallId, "Settings");
+    final localVersion = await _getSettingsVersion(localSettings);
+
+    // Download ONLY the latest Settings file first
     try {
-      final files = [
-        {"remote": "/$wallId/MirrorDic.txt", "local": "MirrorDic.txt"},
-        {"remote": "/$wallId/holdlist.csv", "local": "holdlist.csv"},
-        {"remote": "/$wallId/dicholdlist.txt", "local": "dicholdlist.txt"},
-        {"remote": "/$wallId/Settings", "local": "Settings"},
-        {"remote": "/$wallId/wall.png", "local": "wall.png"},
-      ];
-      for (final f in files) {
+      await dropboxFileService.downloadAndCacheFile(
+        wallId,
+        "/$wallId/Settings",
+        "Settings.tmp",
+      );
+    } catch (e) {
+      debugPrint("⚠️ Couldn't check Settings version: $e");
+      return;
+    }
+
+    final tempSettings = await _getLocalWallFile(wallId, "Settings.tmp");
+    final dropboxVersion = await _getSettingsVersion(tempSettings);
+
+    // If versions match, keep local files
+    final wallImage = await _getLocalWallFile(wallId, "wall.png");
+
+    if (localVersion == dropboxVersion && await wallImage.exists()) {
+      debugPrint("✅ Wall assets already up to date.");
+
+      try {
+        await tempSettings.delete();
+      } catch (_) {}
+
+      return;
+    }
+
+    debugPrint("⬇️ Wall assets changed. Downloading latest files...");
+
+    // Replace Settings with the new version
+    try {
+      if (await localSettings.exists()) {
+        await localSettings.delete();
+      }
+      await tempSettings.rename(localSettings.path);
+    } catch (e) {
+      debugPrint("⚠️ Failed to replace Settings: $e");
+    }
+
+    // Download the remaining wall assets
+    final files = [
+      {"remote": "/$wallId/MirrorDic.txt", "local": "MirrorDic.txt"},
+      {"remote": "/$wallId/holdlist.csv", "local": "holdlist.csv"},
+      {"remote": "/$wallId/dicholdlist.txt", "local": "dicholdlist.txt"},
+      {"remote": "/$wallId/wall.png", "local": "wall.png"},
+    ];
+
+    for (final f in files) {
+      try {
         await dropboxFileService.downloadAndCacheFile(
           wallId,
           f["remote"]!,
           f["local"]!,
         );
+
+        debugPrint("⬇️ Downloaded ${f["local"]}");
+      } catch (e) {
+        debugPrint("⚠️ Failed to download ${f["local"]}: $e");
       }
-    } catch (e) {
-      debugPrint("⚠️ Failed Dropbox assets for $wallId: $e");
     }
   }
 
@@ -620,7 +727,7 @@ class _WallLogPageState extends State<WallLogPage>
   Future<void> _enterWall(String wall) async {
     setState(() {
       _isLoadingWall = true;
-      _loadingMessage = "🔄 Please wait...\n📋 Loading wall info...";
+      _loadingMessage = "📋 Loading wall info...";
     });
 
     await _saveLastWall(wall);
@@ -631,7 +738,10 @@ class _WallLogPageState extends State<WallLogPage>
       final lat = double.tryParse(wallData['lat'] ?? '');
       final lon = double.tryParse(wallData['lon'] ?? '');
       if (lat != null && lon != null) {
-        _mapController.move(LatLng(lat, lon), 14.0);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _mapController.move(LatLng(lat, lon), 14.0);
+        });
       }
       final activeFlag = int.tryParse(wallData['active'] ?? '0') ?? 0;
       if (activeFlag == 1 || activeFlag == 2) {
@@ -647,9 +757,11 @@ class _WallLogPageState extends State<WallLogPage>
 
     // Step 1: Info
     setState(() => _loadingMessage = "📋 Loading wall info...");
-    await _tryFetchOrCacheTicks(api, wall);
-    await _tryFetchOrCacheLikes(api, wall);
-    await _tryFetchOrCacheSessions(api, wall);
+    await Future.wait([
+      _tryFetchOrCacheTicks(api, wall),
+      _tryFetchOrCacheLikes(api, wall),
+      _tryFetchOrCacheSessions(api, wall),
+    ]);
 
     // Step 2: Assets
     setState(() => _loadingMessage = "🖼️ Loading wall image...");
@@ -862,12 +974,6 @@ class _WallLogPageState extends State<WallLogPage>
                       ),
                     ),
                   ),
-
-                // ✅ Nearest wall banner
-                if (_highlightWall != null && selectedWall == null) ...[
-                  const SizedBox(height: 10),
-                  _nearestWallBanner(),
-                ],
 
                 const SizedBox(height: 16),
                 if (_userPosition != null || selectedWall != null) ...[

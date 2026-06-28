@@ -12,6 +12,7 @@ import '../hold_utils.dart';
 enum ProblemFilterType { none, liked, attempted, ticked, notTicked, benchmarks }
 
 enum ProblemSortType {
+  savedOrder,
   grade,
   newest,
   oldest,
@@ -334,9 +335,46 @@ class ProblemsProvider extends ChangeNotifier {
   void _sortFilteredProblems() {
     filteredProblems.sort((a, b) {
       switch (selectedSort) {
+        case ProblemSortType.savedOrder:
+          return (a['orderIndex'] ?? 0).compareTo(b['orderIndex'] ?? 0);
         case ProblemSortType.newest:
           return (b['orderIndex'] ?? 0).compareTo(a['orderIndex'] ?? 0);
 
+        case ProblemSortType.oldest:
+          return (a['orderIndex'] ?? 0).compareTo(b['orderIndex'] ?? 0);
+
+        case ProblemSortType.mostAscents:
+          return (b['ticks'] ?? 0).compareTo(a['ticks'] ?? 0);
+
+        case ProblemSortType.leastAscents:
+          return (a['ticks'] ?? 0).compareTo(b['ticks'] ?? 0);
+
+        case ProblemSortType.mostLikes:
+          return (b['likesCount'] ?? 0).compareTo(a['likesCount'] ?? 0);
+
+        case ProblemSortType.leastLikes:
+          return (a['likesCount'] ?? 0).compareTo(b['likesCount'] ?? 0);
+
+        case ProblemSortType.grade:
+          final gA = a['grade'] ?? '';
+          final gB = b['grade'] ?? '';
+          final cmp = gradeSort(gA, gB);
+          if (cmp != 0) return cmp;
+
+          final popA = (a['ticks'] ?? 0) + (a['likesCount'] ?? 0);
+          final popB = (b['ticks'] ?? 0) + (b['likesCount'] ?? 0);
+          return popB.compareTo(popA);
+      }
+    });
+  }
+
+  void sortProblemList(List<Map<String, dynamic>> problems) {
+    problems.sort((a, b) {
+      switch (selectedSort) {
+        case ProblemSortType.savedOrder:
+          return (a['orderIndex'] ?? 0).compareTo(b['orderIndex'] ?? 0);
+
+        case ProblemSortType.newest:
         case ProblemSortType.oldest:
           return (a['orderIndex'] ?? 0).compareTo(b['orderIndex'] ?? 0);
 

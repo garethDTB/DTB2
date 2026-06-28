@@ -409,32 +409,27 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 24),
           const Divider(),
 
-          Container(
+          Card(
             key: _guideKey,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: _toggleGuide,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: _showGuide
-                      ? theme.colorScheme.primary.withOpacity(0.08)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("App Guide", style: theme.textTheme.titleLarge),
-                    AnimatedRotation(
-                      turns: _showGuide ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: const Icon(Icons.keyboard_arrow_down_rounded),
-                    ),
-                  ],
-                ),
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            color: _showGuide
+                ? theme.colorScheme.primary.withOpacity(0.05)
+                : theme.cardColor,
+            child: ListTile(
+              leading: const Icon(Icons.menu_book),
+              title: const Text("App Guide"),
+              subtitle: const Text(
+                "How to use filters, lists, casting and more",
               ),
+              trailing: AnimatedRotation(
+                turns: _showGuide ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const Icon(Icons.keyboard_arrow_down_rounded),
+              ),
+              onTap: _toggleGuide,
             ),
           ),
 
@@ -516,7 +511,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       "• ❌ Attempt — Log that you’ve tried the problem but haven’t sent it yet.\n"
                       "• ✅ Tick — Mark the problem as completed in this session.\n"
                       "• ⚡ Flash — Record that you sent it on your first attempt.\n"
-                      "• 💡 Cast to Board — Push the problem to your connected training board.\n"
+                      "• 💡 Show the problem on the board — lights up the holds on the training board.\n"
                       "• 🔄 Mirror — Toggle a mirrored version of the problem on the opposite side.\n"
                       "• 📺 What’s On — See what’s currently loaded on the board.\n"
                       "• 💬 Comments — View or add feedback from other climbers.\n\n"

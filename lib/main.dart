@@ -37,8 +37,6 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  if (kDebugMode) await clearAllWallData();
-
   runApp(
     MultiProvider(
       providers: [
