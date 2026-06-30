@@ -312,16 +312,25 @@ class _WallLogPageState extends State<WallLogPage>
     return DropdownMenuItem<String>(
       value: appName,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            userName,
-            style: TextStyle(
-              fontWeight: isNearest ? FontWeight.bold : FontWeight.normal,
-              color: isNearest ? Colors.blue : null,
+          Expanded(
+            child: Text(
+              userName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: isNearest ? FontWeight.bold : FontWeight.normal,
+                color: isNearest ? Colors.blue : null,
+              ),
             ),
           ),
-          Text(distKm, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+          if (distKm.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(
+              distKm,
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
+          ],
         ],
       ),
     );
@@ -897,7 +906,7 @@ class _WallLogPageState extends State<WallLogPage>
           ),
 
           body: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

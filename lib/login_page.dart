@@ -227,28 +227,31 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin(AuthState auth, ApiService api) async {
-    if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-      final ok = await auth.login(
-        api,
-        _usernameCtrl.text.trim(),
-        _passwordCtrl.text.trim(),
+    setState(() => _isLoading = true);
+
+    final ok = await auth.login(
+      api,
+      _usernameCtrl.text.trim(),
+      _passwordCtrl.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed. Please try again.')),
       );
-
-      setState(() => _isLoading = false);
-
-      if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login failed. Please try again.')),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const WallLogPage()),
-        );
-      }
+      return;
     }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const WallLogPage()),
+    );
   }
 
   DateTime? _parseDob(String value) {
@@ -646,6 +649,9 @@ class _LoginPageState extends State<LoginPage> {
                   label: const Text("Continue as Guest"),
                   onPressed: () async {
                     await auth.setGuestMode(true);
+
+                    if (!mounted) return;
+
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(builder: (_) => const WallLogPage()),

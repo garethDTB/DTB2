@@ -1202,8 +1202,8 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       context: context,
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: ListView(
+            shrinkWrap: true,
             children: [
               ListTile(
                 title: Text(
@@ -1938,6 +1938,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       elements: displayedProblems,
       groupBy: (element) =>
           (element['grade'] ?? element['Grade'] ?? '').toString(),
+      floatingHeader: false,
       physics: const AlwaysScrollableScrollPhysics(),
       groupSeparatorBuilder: (Map<String, dynamic> element) {
         final grade = (element['grade'] ?? element['Grade'] ?? '').toString();

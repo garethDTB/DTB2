@@ -1595,37 +1595,35 @@ class CreateProblemStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 54,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: isWarning ? Colors.red.shade700 : Colors.black87,
-              ),
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 60),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: isWarning ? Colors.red.shade700 : Colors.black87,
             ),
-            const SizedBox(height: 2),
-            Text(
-              message,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                color: isWarning ? Colors.red.shade700 : Colors.grey.shade700,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              color: isWarning ? Colors.red.shade700 : Colors.grey.shade700,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1823,7 +1821,13 @@ class _SaveProblemDialogState extends State<SaveProblemDialog> {
         children: const [
           Icon(Icons.save, color: Colors.blue),
           SizedBox(width: 8),
-          Text("Save Problem"),
+          Expanded(
+            child: Text(
+              "Save Problem",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
       content: SizedBox(

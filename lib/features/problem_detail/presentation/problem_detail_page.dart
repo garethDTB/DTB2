@@ -283,6 +283,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
 
   @override
   void didPopNext() {
+    if (!mounted) return;
     // User returned from comments page
     _loadAllComments();
     setState(() {});
@@ -297,8 +298,9 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     try {
       final comments = await api.getComments(widget.wallId, rawName);
 
+      if (!mounted) return;
+
       setState(() {
-        // Make sure it's a list of maps
         _allComments = comments.cast<Map<String, dynamic>>();
       });
     } catch (e) {
@@ -344,12 +346,15 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/walls/${widget.wallId}/wall.png');
     if (await file.exists()) {
+      if (!mounted) return;
       setState(() => wallImageFile = file);
     }
   }
 
   Future<void> _loadGradeMode() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+
     setState(() {
       gradeMode = prefs.getString('gradeMode') ?? widget.gradeMode;
       autoSendToBoard = prefs.getBool('autoSend') ?? false;
@@ -436,6 +441,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
 
     try {
       final likes = await api.getWallLikes(widget.wallId, user);
+      if (!mounted) return;
       setState(() {
         _likesCount = (likes["aggregated"] as List)
             .where((e) => e["Problem"] == rawName)
@@ -478,13 +484,18 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
   }
 
   void _updateSwipeMessage(String msg, Color bg, {int clearAfter = 0}) {
+    if (!mounted) return;
+
     setState(() {
       _swipeMessage = msg;
       _swipeMessageColor = bg;
     });
+
     if (clearAfter > 0) {
       Future.delayed(Duration(seconds: clearAfter), () {
-        if (mounted && _swipeMessage == msg) {
+        if (!mounted) return;
+
+        if (_swipeMessage == msg) {
           setState(() => _swipeMessage = null);
         }
       });
@@ -1193,6 +1204,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
       },
       child: Scaffold(
         appBar: AppBar(
+          titleSpacing: -8,
           backgroundColor: headerColor,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1261,7 +1273,7 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                     velocity: 24.0,
                     pauseAfterRound: const Duration(seconds: 1),
                     startAfter: const Duration(seconds: 0),
-                    startPadding: 600.0,
+                    startPadding: 40.0,
                     style: const TextStyle(
                       fontSize: 11,
                       height: 1.0,
