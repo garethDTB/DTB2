@@ -53,6 +53,8 @@ class ProblemsProvider extends ChangeNotifier {
     ApiService api,
     String user, {
     bool forceRefresh = false,
+    String query = "",
+    ProblemFilterType extraFilter = ProblemFilterType.none,
   }) async {
     if (!forceRefresh &&
         hasLoaded &&
@@ -61,33 +63,37 @@ class ProblemsProvider extends ChangeNotifier {
       return;
     }
 
-    isLoading = true;
-    hasLoaded = false;
-    loadedWallId = wallId;
-    notifyListeners();
+    final firstLoad = !hasLoaded || loadedWallId != wallId;
 
-    // ✅ Reset all state before loading new wall
-    allProblems = [];
-    filteredProblems = [];
-    attemptedProblems = {};
-    tickedProblemsPast = {};
-    tickedProblemsToday = {};
-    selectedGrade = null;
+    isLoading = true;
+    loadedWallId = wallId;
+
+    if (firstLoad) {
+      hasLoaded = false;
+
+      allProblems = [];
+      filteredProblems = [];
+      attemptedProblems = {};
+      tickedProblemsPast = {};
+      tickedProblemsToday = {};
+      selectedGrade = null;
+
+      notifyListeners();
+    }
 
     try {
       await _loadSettingsPrefs();
       await _loadProblems(wallId, api);
-      await _loadTicks(wallId);
-      await _loadLikes(wallId);
-      await _loadSessions(wallId, api, user); // ✅ hybrid
+      await _loadTicks(wallId, api);
+      await _loadLikes(wallId, api, user);
+      await _loadSessions(wallId, api, user);
       await _loadSettings(wallId);
-
-      filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
     } finally {
       isLoading = false;
       hasLoaded = true;
-      notifyListeners();
     }
+
+    filterProblems(query, selectedGrade, extraFilter: extraFilter);
   }
 
   Future<void> _loadSettingsPrefs() async {
@@ -148,8 +154,6 @@ class ProblemsProvider extends ChangeNotifier {
         'orderIndex': orderIndex,
       };
     }).toList();
-
-    filterProblems("", selectedGrade, extraFilter: ProblemFilterType.none);
   }
 
   /// ✅ Ensure holds are always a List<Map<String,String>>
@@ -174,38 +178,83 @@ class ProblemsProvider extends ChangeNotifier {
     return [];
   }
 
-  Future<void> _loadTicks(String wallId) async {
+  Future<void> _loadTicks(String wallId, ApiService api) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString("ticks_$wallId");
-    if (jsonString == null) return;
+    List<dynamic> ticks = [];
 
-    final List<dynamic> ticks = jsonDecode(jsonString);
+    try {
+      ticks = await api.getWallTicks(wallId);
+      await prefs.setString("ticks_$wallId", jsonEncode(ticks));
+      debugPrint("☁️ Loaded ${ticks.length} ticks from Azure");
+    } catch (e) {
+      final jsonString = prefs.getString("ticks_$wallId");
+
+      if (jsonString != null) {
+        ticks = jsonDecode(jsonString);
+        debugPrint("📦 Loaded ticks from local cache");
+      } else {
+        debugPrint("⚠️ No local or remote ticks found for $wallId");
+      }
+    }
+
     final tickMap = {
       for (var t in ticks) (t['Problem'] as String).trim(): t['Count'],
     };
+
     for (var problem in allProblems) {
       final rawName = (problem['name'] as String? ?? '').trim();
       problem['ticks'] = tickMap[rawName] ?? 0;
     }
   }
 
-  Future<void> _loadLikes(String wallId) async {
+  Future<void> _loadLikes(String wallId, ApiService api, String user) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString("likes_$wallId");
-    if (jsonString == null) return;
 
-    final Map<String, dynamic> decoded = jsonDecode(jsonString);
-    final List<dynamic> aggregated = decoded['aggregated'] ?? [];
-    final Map<String, dynamic> user = decoded['user'] ?? {};
+    List<dynamic> aggregated = [];
+    Map<String, dynamic> userLikes = {};
+
+    try {
+      final likesResponse = await api.getWallLikes(wallId, user);
+
+      aggregated = (likesResponse['aggregated'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      userLikes = Map<String, dynamic>.from(likesResponse['user'] ?? {});
+
+      await prefs.setString(
+        "likes_$wallId",
+        jsonEncode({"aggregated": aggregated, "user": userLikes}),
+      );
+
+      debugPrint("☁️ Loaded likes from Azure");
+    } catch (e) {
+      final jsonString = prefs.getString("likes_$wallId");
+
+      if (jsonString != null) {
+        final decoded = jsonDecode(jsonString);
+
+        aggregated = decoded['aggregated'] ?? [];
+
+        userLikes = Map<String, dynamic>.from(decoded['user'] ?? {});
+
+        debugPrint("📦 Loaded likes from local cache");
+      } else {
+        debugPrint("⚠️ No local or remote likes found for $wallId");
+      }
+    }
 
     final likeMap = {
       for (var l in aggregated)
         (l['Problem'] as String).trim().toLowerCase(): l['Count'] as int,
     };
-    final likedByUserSet = user.keys.map((p) => p.trim().toLowerCase()).toSet();
+
+    final likedByUserSet = userLikes.keys
+        .map((p) => p.trim().toLowerCase())
+        .toSet();
 
     for (var problem in allProblems) {
       final rawName = (problem['name'] as String? ?? '').trim().toLowerCase();
+
       problem['likesCount'] = likeMap[rawName] ?? 0;
       problem['likedByUser'] = likedByUserSet.contains(rawName);
     }

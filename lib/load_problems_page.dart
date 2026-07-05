@@ -645,24 +645,14 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
           onRefresh: () async {
             final api = context.read<ApiService>();
             final auth = context.read<AuthState>();
+
             await provider.load(
               widget.wallId,
               api,
               auth.username ?? "guest",
               forceRefresh: true,
-            );
-
-            // 🔄 Reset filters & search after reload
-            setState(() {
-              activeFilter = ProblemFilterType.none;
-              provider.selectedGrade = null;
-              provider.selectedSort = ProblemSortType.grade;
-              searchController.clear();
-            });
-            provider.filterProblems(
-              "",
-              null,
-              extraFilter: ProblemFilterType.none,
+              query: searchController.text,
+              extraFilter: activeFilter,
             );
           },
 
@@ -1802,6 +1792,8 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                         api,
                         auth.username ?? "guest",
                         forceRefresh: true,
+                        query: searchController.text,
+                        extraFilter: activeFilter,
                       );
 
                       await _refreshListsKeepingSelection();
@@ -1924,6 +1916,8 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                   api,
                   auth.username ?? "guest",
                   forceRefresh: true,
+                  query: searchController.text,
+                  extraFilter: activeFilter,
                 );
 
                 await _refreshListsKeepingSelection();
@@ -2086,6 +2080,8 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                   api,
                   auth.username ?? "guest",
                   forceRefresh: true,
+                  query: searchController.text,
+                  extraFilter: activeFilter,
                 );
 
                 await _refreshListsKeepingSelection();
