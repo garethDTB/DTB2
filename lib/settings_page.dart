@@ -5,9 +5,13 @@ import 'package:provider/provider.dart';
 import 'auth_state.dart';
 import 'edit_profile_page.dart';
 import 'services/ble_cast_service.dart';
+import 'wall_setup_page.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  final String? wallId;
+  final List<String> superusers;
+
+  const SettingsPage({super.key, this.wallId, this.superusers = const []});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -255,6 +259,14 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final auth = context.watch<AuthState>();
+
+    final isPrimarySuperUser =
+        widget.wallId != null &&
+        widget.superusers.isNotEmpty &&
+        auth.username != null &&
+        widget.superusers.first.trim().toLowerCase() ==
+            auth.username!.trim().toLowerCase();
 
     return Scaffold(
       appBar: AppBar(title: const Text("Settings & Help")),
@@ -596,15 +608,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
           const SizedBox(height: 24),
 
-          Center(
-            child: Text(
-              "Version 2.0.0 • © 2026 Digital Training Boards",
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
           Card(
             color: Colors.red.shade50,
             shape: RoundedRectangleBorder(
@@ -628,6 +631,45 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
 
           const SizedBox(height: 24),
+
+          if (isPrimarySuperUser) ...[
+            const SizedBox(height: 12),
+
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.build_circle_outlined),
+                title: const Text(
+                  "Wall Setup",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  "Set up Wi-Fi, wall image, holds and LEDs.",
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => WallSetupPage(wallId: widget.wallId!),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+
+          Center(
+            child: Text(
+              "Version 3.0.0 • © 2026 Digital Training Boards",
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+            ),
+          ),
         ],
       ),
     );

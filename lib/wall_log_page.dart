@@ -456,6 +456,8 @@ class _WallLogPageState extends State<WallLogPage>
       final values = line.split(',');
       return {
         'appName': values.length > 6 ? values[6].trim() : "",
+        'friendly-name': values.length > 2 ? values[2].trim() : "",
+        'board_angle': values.length > 3 ? values[3].trim() : "",
         'userName': [
           if (values.length > 2) values[2].trim(),
           if (values.length > 3) values[3].trim(),
@@ -622,87 +624,59 @@ class _WallLogPageState extends State<WallLogPage>
     }
   }
 
-  Future<String> _getSettingsVersion(File settingsFile) async {
-    if (!await settingsFile.exists()) return "";
-
-    try {
-      final lines = await settingsFile.readAsLines();
-
-      for (final line in lines) {
-        if (line.startsWith("Version=")) {
-          return line.substring(8).trim();
-        }
-      }
-    } catch (_) {}
-
-    return "";
-  }
-
-  /// ✅ Dropbox assets fetch
   Future<void> _tryFetchOrCacheWallAssets(String wallId) async {
-    // Local Settings file
-    final localSettings = await _getLocalWallFile(wallId, "Settings");
-    final localVersion = await _getSettingsVersion(localSettings);
-
-    // Download ONLY the latest Settings file first
-    try {
-      await dropboxFileService.downloadAndCacheFile(
-        wallId,
-        "/$wallId/Settings",
-        "Settings.tmp",
-      );
-    } catch (e) {
-      debugPrint("⚠️ Couldn't check Settings version: $e");
-      return;
-    }
-
-    final tempSettings = await _getLocalWallFile(wallId, "Settings.tmp");
-    final dropboxVersion = await _getSettingsVersion(tempSettings);
-
-    // If versions match, keep local files
-    final wallImage = await _getLocalWallFile(wallId, "wall.png");
-
-    if (localVersion == dropboxVersion && await wallImage.exists()) {
-      debugPrint("✅ Wall assets already up to date.");
-
-      try {
-        await tempSettings.delete();
-      } catch (_) {}
-
-      return;
-    }
-
-    debugPrint("⬇️ Wall assets changed. Downloading latest files...");
-
-    // Replace Settings with the new version
-    try {
-      if (await localSettings.exists()) {
-        await localSettings.delete();
-      }
-      await tempSettings.rename(localSettings.path);
-    } catch (e) {
-      debugPrint("⚠️ Failed to replace Settings: $e");
-    }
-
-    // Download the remaining wall assets
     final files = [
-      {"remote": "/$wallId/MirrorDic.txt", "local": "MirrorDic.txt"},
+      {"remote": "/$wallId/Settings", "local": "Settings"},
+      {"remote": "/$wallId/wall.png", "local": "wall.png"},
       {"remote": "/$wallId/holdlist.csv", "local": "holdlist.csv"},
       {"remote": "/$wallId/dicholdlist.txt", "local": "dicholdlist.txt"},
-      {"remote": "/$wallId/wall.png", "local": "wall.png"},
+      {"remote": "/$wallId/MirrorDic.txt", "local": "MirrorDic.txt"},
     ];
 
     for (final f in files) {
+      final remotePath = f["remote"]!;
+      final localFilename = f["local"]!;
+
+      final localFile = await _getLocalWallFile(wallId, localFilename);
+
       try {
-        await dropboxFileService.downloadAndCacheFile(
-          wallId,
-          f["remote"]!,
-          f["local"]!,
+        // Check Dropbox's revision number.
+        // This does NOT download the actual file.
+        final needsUpdate = await dropboxFileService.cachedFileNeedsUpdate(
+          remotePath,
+          localFile,
         );
 
-        debugPrint("⬇️ Downloaded ${f["local"]}");
+        if (!needsUpdate) {
+          debugPrint("✅ $localFilename unchanged - using local cache");
+          continue;
+        }
+
+        // File is missing, has changed, or does not yet have
+        // a locally stored Dropbox revision.
+        debugPrint("⬇️ $localFilename is new or changed - downloading...");
+
+        await dropboxFileService.downloadAndCacheFile(
+          wallId,
+          remotePath,
+          localFilename,
+        );
+
+        debugPrint("✅ $localFilename updated from Dropbox");
       } catch (e) {
-        debugPrint("⚠️ Failed to download ${f["local"]}: $e");
+        // If Dropbox/internet fails but we already have the file,
+        // simply continue using the cached copy.
+        if (await localFile.exists()) {
+          debugPrint(
+            "⚠️ Couldn't check $localFilename: $e "
+            "- using existing local copy",
+          );
+        } else {
+          debugPrint(
+            "❌ $localFilename unavailable locally "
+            "and couldn't download it: $e",
+          );
+        }
       }
     }
   }
@@ -1153,7 +1127,11 @@ class _WallLogPageState extends State<WallLogPage>
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const SettingsPage(),
+                                  builder: (_) => SettingsPage(
+                                    wallId: selectedWall!,
+                                    superusers:
+                                        _wallSuperusers[selectedWall!] ?? [],
+                                  ),
                                 ),
                               );
                             },
