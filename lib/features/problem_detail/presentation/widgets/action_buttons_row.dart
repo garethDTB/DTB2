@@ -15,6 +15,8 @@ class ActionButtonsRow extends StatefulWidget {
   final VoidCallback? onMirrorToggle;
   final VoidCallback? onWhatsOn;
   final VoidCallback? onComments;
+  final VoidCallback? onAddToList;
+  final VoidCallback? onBetaVideos;
 
   const ActionButtonsRow({
     super.key,
@@ -29,6 +31,8 @@ class ActionButtonsRow extends StatefulWidget {
     this.onMirrorToggle,
     this.onWhatsOn,
     this.onComments,
+    this.onAddToList,
+    this.onBetaVideos,
   });
 
   @override
@@ -169,6 +173,31 @@ class _ActionButtonsRowState extends State<ActionButtonsRow> {
                       ),
                       label: "Comments",
                       onPressed: widget.onComments!,
+                    ),
+
+                  // 📋 Add to List
+                  if (widget.onAddToList != null)
+                    _buildButton(
+                      icon: const Icon(
+                        Icons.playlist_add,
+                        color: Colors.deepPurple,
+                        size: 28,
+                      ),
+                      label: "List",
+                      onPressed: isGuest ? null : widget.onAddToList!,
+                      disabled: isGuest,
+                    ),
+
+                  // 🎥 Beta Videos
+                  if (widget.onBetaVideos != null)
+                    _buildButton(
+                      icon: const Icon(
+                        Icons.video_library,
+                        color: Colors.blueGrey,
+                        size: 28,
+                      ),
+                      label: "Videos",
+                      onPressed: widget.onBetaVideos!,
                     ),
                 ],
               ),

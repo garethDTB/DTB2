@@ -483,6 +483,28 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
     }
   }
 
+  void _openBetaVideos() {
+    final problem = widget.problems[currentIndex];
+
+    final problemName = (problem['name'] ?? '').toString();
+    final grade = (problem['grade'] ?? '').toString();
+    final setter = (problem['setter'] ?? '').toString();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BetaVideosPage(
+          problemId: problemName,
+          problemName: problemName,
+          grade: grade,
+          wallName: widget.wallId,
+          angle: '',
+          setter: setter,
+        ),
+      ),
+    );
+  }
+
   void _updateSwipeMessage(String msg, Color bg, {int clearAfter = 0}) {
     if (!mounted) return;
 
@@ -1286,38 +1308,6 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
           ),
 
           actions: [
-            IconButton(
-              icon: const Icon(Icons.playlist_add),
-              tooltip: "Add to list",
-              onPressed: _showAddToListDialog,
-            ),
-            IconButton(
-              icon: const Icon(Icons.video_library),
-              tooltip: "Beta videos",
-              onPressed: () {
-                final problemName = (problem['name'] ?? '').toString();
-                final grade = (problem['grade'] ?? '').toString();
-                final setter = (problem['setter'] ?? '').toString();
-
-                final problemId =
-                    (problem['id'] ?? problem['Id'] ?? problem['ID'] ?? '')
-                        .toString();
-
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BetaVideosPage(
-                      problemId: problemName,
-                      problemName: problemName,
-                      grade: grade,
-                      wallName: widget.wallId,
-                      angle: '',
-                      setter: setter,
-                    ),
-                  ),
-                );
-              },
-            ),
             if (canEdit)
               IconButton(
                 icon: const Icon(Icons.edit),
@@ -1435,6 +1425,8 @@ class _ProblemDetailPageState extends State<ProblemDetailPage> with RouteAware {
                           : null,
                       onWhatsOn: _loadWhatsOn,
                       onComments: _openComments,
+                      onAddToList: _showAddToListDialog,
+                      onBetaVideos: _openBetaVideos,
                     ),
 
                     const SizedBox(height: 8),

@@ -348,6 +348,10 @@ class _CreateProblemPageState extends State<CreateProblemPage> {
       }
 
       final Map<String, dynamic> decoded = jsonDecode(data);
+
+      debugPrint("🟢 CREATE WALL: ${widget.wallId}");
+      debugPrint("🟢 DICHOLDLIST ENTRIES: ${decoded.length}");
+
       holds.clear();
       decoded.forEach((label, val) {
         if (val is List && val.length >= 2) {
@@ -1555,10 +1559,11 @@ class CreateProblemActionBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+
           Expanded(
             child: OutlinedButton(
               onPressed: onPreview,
-              child: const Icon(Icons.cast),
+              child: const Icon(Icons.lightbulb, color: Colors.blue),
             ),
           ),
           const SizedBox(width: 8),
