@@ -18,11 +18,15 @@ class LoadProblemsPage extends StatefulWidget {
   final String wallId;
   final bool isDraftMode; // ✅ distinguish drafts
   final List<String> superusers;
+  final List<String>? newsProblemNames;
+  final String? newsTitle;
   const LoadProblemsPage({
     super.key,
     required this.wallId,
     this.isDraftMode = false,
     this.superusers = const [],
+    this.newsProblemNames,
+    this.newsTitle,
   });
 
   @override
@@ -42,6 +46,10 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
   Map<String, dynamic>? _selectedList;
   bool _listsLoading = false;
   bool _editingList = false;
+  bool _newsFilterCleared = false;
+
+  bool get _newsFilterActive =>
+      widget.newsProblemNames != null && !_newsFilterCleared;
 
   @override
   void initState() {
@@ -156,12 +164,25 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
     final descriptionController = TextEditingController();
     bool isPublic = true;
 
-    final problemsToSave = provider.filteredProblems.map((problem) {
+    final newsNames = widget.newsProblemNames
+        ?.map((name) => name.trim().toLowerCase())
+        .toSet();
+    final currentProblems = _newsFilterActive
+        ? provider.filteredProblems
+              .where(
+                (problem) => newsNames!.contains(
+                  (problem['name'] ?? '').toString().trim().toLowerCase(),
+                ),
+              )
+              .toList()
+        : provider.filteredProblems;
+
+    final problemsToSave = currentProblems.map((problem) {
       return {
         "ProblemId": problem['id'] ?? '',
         "Problem": problem['name'] ?? '',
         "Grade": problem['grade'] ?? '',
-        "Order": provider.filteredProblems.indexOf(problem) + 1,
+        "Order": currentProblems.indexOf(problem) + 1,
         "Note": "",
       };
     }).toList();
@@ -638,7 +659,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
             ],
           ),
         );
-      } else if (provider.filteredProblems.isEmpty) {
+      } else if (provider.filteredProblems.isEmpty && !_newsFilterActive) {
         body = const Center(child: Text("No problems yet for this wall"));
       } else {
         body = RefreshIndicator(
@@ -666,6 +687,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
     }
 
     final filtersActive =
+        _newsFilterActive ||
         activeFilter != ProblemFilterType.none ||
         (!widget.isDraftMode && provider.selectedGrade != null) ||
         provider.selectedMinGrade != null ||
@@ -704,6 +726,24 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       body: SafeArea(
         child: Column(
           children: [
+            if (_newsFilterActive)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Wall News: ${widget.newsTitle ?? 'Selected problems'}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Text('${widget.newsProblemNames!.length} selected'),
+                  ],
+                ),
+              ),
             // 🔍 Search bar
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -1000,6 +1040,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
                         onTap: () {
                           setState(() {
                             activeFilter = ProblemFilterType.none;
+                            _newsFilterCleared = true;
 
                             provider.selectedGrade = null;
                             provider.selectedMinGrade = null;
@@ -1559,8 +1600,20 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
         _selectedList != null &&
         (_selectedList!['Users'] ?? '').toString() == username;
     List<Map<String, dynamic>> displayedProblems = problems;
+    if (!isDraftMode && _newsFilterActive) {
+      final allowed = widget.newsProblemNames!
+          .map((name) => name.trim().toLowerCase())
+          .toSet();
+      displayedProblems = problems
+          .where(
+            (p) => allowed.contains(
+              (p['name'] ?? '').toString().trim().toLowerCase(),
+            ),
+          )
+          .toList();
+    }
 
-    if (!isDraftMode && _selectedList != null) {
+    if (!isDraftMode && _selectedList != null && !_newsFilterActive) {
       final listProblems = (_selectedList!['Problems'] as List? ?? []);
 
       final problemIds = listProblems
@@ -1592,7 +1645,7 @@ class _LoadProblemsPageState extends State<LoadProblemsPage> {
       );
     }
 
-    if (!isDraftMode && _selectedList != null) {
+    if (!isDraftMode && _selectedList != null && !_newsFilterActive) {
       final provider = context.read<ProblemsProvider>();
 
       final listProblems = List<Map<String, dynamic>>.from(

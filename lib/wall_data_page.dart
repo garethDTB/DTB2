@@ -182,38 +182,38 @@ class _WallDataPageState extends State<WallDataPage> {
   Map<String, int> _myGradeDistribution() {
     final map = <String, int>{};
 
-    final uniqueTicksByProblem = <String, Map<String, dynamic>>{};
+    // Current problems are the authoritative list.
+    final currentProblems = <String, Map<String, dynamic>>{};
 
-    for (final tick in _myTicks) {
-      final name = _tickProblemName(tick);
-      if (name.isEmpty) continue;
-      uniqueTicksByProblem[name] = tick;
+    for (final problem in _problems) {
+      final name = _problemName(problem).trim().toLowerCase();
+      if (name.isNotEmpty) {
+        currentProblems[name] = problem;
+      }
     }
 
-    for (final tick in uniqueTicksByProblem.values) {
-      var grade = _tickGrade(tick);
+    // Count each current problem only once.
+    final countedProblems = <String>{};
 
-      if (grade.isEmpty) {
-        final problemName = _tickProblemName(tick);
-        final problem = _problems.firstWhere(
-          (p) => _problemName(p) == problemName,
-          orElse: () => {},
-        );
-        if (problem.isNotEmpty) {
-          grade = _problemGrade(problem);
-        }
-      }
+    for (final tick in _myTicks) {
+      final name = _tickProblemName(tick).trim().toLowerCase();
 
+      if (name.isEmpty || countedProblems.contains(name)) continue;
+
+      final currentProblem = currentProblems[name];
+      if (currentProblem == null) continue;
+
+      final grade = _problemGrade(currentProblem);
       if (grade.isEmpty) continue;
+
+      countedProblems.add(name);
       map[grade] = (map[grade] ?? 0) + 1;
     }
 
-    final sorted = Map.fromEntries(
+    return Map.fromEntries(
       map.entries.toList()
         ..sort((a, b) => _gradeIndex(a.key).compareTo(_gradeIndex(b.key))),
     );
-
-    return sorted;
   }
 
   @override
@@ -251,9 +251,17 @@ class _WallDataPageState extends State<WallDataPage> {
         ? 0.0
         : (problemsSetByMe / totalProblems) * 100;
 
+    final currentNames = _problems
+        .map(_problemName)
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.trim().toLowerCase())
+        .toSet();
+
     final myTickedNames = _myTicks
         .map(_tickProblemName)
-        .where((p) => p.isNotEmpty)
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.trim().toLowerCase())
+        .where(currentNames.contains)
         .toSet();
 
     final myUniqueClimbs = myTickedNames.length;
@@ -265,7 +273,7 @@ class _WallDataPageState extends State<WallDataPage> {
 
     final benchmarksDone = benchmarks.where((p) {
       final name = _problemName(p);
-      return myTickedNames.contains(name);
+      return myTickedNames.contains(name.trim().toLowerCase());
     }).length;
 
     final totalWallTicks = _wallTicks.fold<int>(0, (sum, t) {

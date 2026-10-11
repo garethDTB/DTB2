@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dtb2/services/api_service.dart';
@@ -6,13 +8,13 @@ import 'auth_state.dart';
 import 'edit_profile_page.dart';
 import 'services/ble_cast_service.dart';
 import 'wall_setup_page.dart';
+import 'services/dropbox_auth_service.dart';
+import 'services/dropbox_file_service.dart';
 
 class SettingsPage extends StatefulWidget {
   final String? wallId;
   final List<String> superusers;
-
   const SettingsPage({super.key, this.wallId, this.superusers = const []});
-
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -22,14 +24,11 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _autoSend = false;
   String _castMethod = "websocket";
   String _bluetoothMode = "auto";
-
   bool _showGuide = false;
   bool _showCastingSettings = false;
-
   final List<bool> _expanded = List.filled(9, false);
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _guideKey = GlobalKey();
-
   @override
   void initState() {
     super.initState();
@@ -52,6 +51,57 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
+  bool _refreshingWall = false;
+
+  Future<void> _refreshWallData() async {
+    final wallId = widget.wallId;
+    if (wallId == null || wallId.isEmpty || _refreshingWall) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Refresh Wall Data?'),
+        content: Text(
+          'Remove the locally stored photograph, hold mappings and settings '
+          'for $wallId? The latest versions will be downloaded from DTB. '
+          'An internet connection is required. Your ticks, likes, lists '
+          'and drafts will not be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Refresh Wall'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _refreshingWall = true);
+    try {
+      // Flutter may retain the old photograph in its in-memory image cache.
+      final dir = await getApplicationDocumentsDirectory();
+      final imageFile = File('${dir.path}/walls/$wallId/wall.png');
+      await FileImage(imageFile).evict();
+
+      await DropboxFileService(DropboxAuthService()).clearWallCache(wallId);
+      if (!mounted) return;
+      // WallLogPage receives true and uses its existing wall-loading flow.
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to refresh wall data: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _refreshingWall = false);
+    }
+  }
+
   Future<void> _connectBluetoothNow() async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -59,15 +109,12 @@ class _SettingsPageState extends State<SettingsPage> {
         duration: Duration(seconds: 2),
       ),
     );
-
     try {
       await BleCastService().sendMessage({
         "type": "test",
         "problem": "test",
       }, boardName: "DTB Board");
-
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bluetooth connected"),
@@ -77,7 +124,6 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Bluetooth connection failed: $e"),
@@ -91,11 +137,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _saveCastMethod(String method) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('castMethod', method);
-
     final bluetoothMode = prefs.getString('bluetoothMode') ?? "auto";
-
     setState(() => _castMethod = method);
-
     if (method == "bluetooth" && bluetoothMode == "exclusive") {
       await _connectBluetoothNow();
     }
@@ -104,9 +147,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _saveBluetoothMode(String mode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('bluetoothMode', mode);
-
     setState(() => _bluetoothMode = mode);
-
     if (_castMethod == "bluetooth" && mode == "exclusive") {
       await _connectBluetoothNow();
     }
@@ -126,9 +167,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _toggleGuide() {
     setState(() => _showGuide = !_showGuide);
-
     if (!_showGuide) return;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final guideContext = _guideKey.currentContext;
       if (guideContext != null) {
@@ -146,7 +185,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final api = ApiService(
       "https://dtb2-func-hkhagfe5gkfaa0g9.ukwest-01.azurewebsites.net/api",
     );
-
     if (auth.isGuest) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -155,7 +193,6 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       return;
     }
-
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -163,7 +200,6 @@ class _SettingsPageState extends State<SettingsPage> {
         onConfirm: (pw) => auth.confirmPassword(api, pw),
       ),
     );
-
     if (ok == true && context.mounted) {
       Navigator.of(
         context,
@@ -174,7 +210,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _confirmDeleteAccount(BuildContext context) async {
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -212,29 +247,23 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
-
     if (confirmed == true) {
       final username = usernameController.text.trim();
       final password = passwordController.text.trim();
-
       if (username.isEmpty || password.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Please enter both fields.")),
         );
         return;
       }
-
       try {
         final api = ApiService(
           "https://dtb2-func-hkhagfe5gkfaa0g9.ukwest-01.azurewebsites.net/api",
         );
-
         final success = await api.deleteAccount(username, password);
-
         if (success) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.clear();
-
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Account deleted successfully.")),
@@ -260,14 +289,12 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final auth = context.watch<AuthState>();
-
     final isPrimarySuperUser =
         widget.wallId != null &&
         widget.superusers.isNotEmpty &&
         auth.username != null &&
         widget.superusers.first.trim().toLowerCase() ==
             auth.username!.trim().toLowerCase();
-
     return Scaffold(
       appBar: AppBar(title: const Text("Settings & Help")),
       body: ListView(
@@ -276,7 +303,6 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Text("Settings", style: theme.textTheme.titleLarge),
           const SizedBox(height: 12),
-
           Card(
             elevation: 1,
             shape: RoundedRectangleBorder(
@@ -303,9 +329,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-
           const SizedBox(height: 12),
-
           Card(
             elevation: 1,
             shape: RoundedRectangleBorder(
@@ -339,7 +363,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 ),
-
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 250),
                   crossFadeState: _showCastingSettings
@@ -365,10 +388,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         groupValue: _castMethod,
                         onChanged: (v) => _saveCastMethod(v!),
                       ),
-
                       if (_castMethod == "bluetooth") ...[
                         const Divider(height: 8),
-
                         RadioListTile<String>(
                           title: const Text("Shared"),
                           subtitle: const Text(
@@ -378,7 +399,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           groupValue: _bluetoothMode,
                           onChanged: (v) => _saveBluetoothMode(v!),
                         ),
-
                         RadioListTile<String>(
                           title: const Text("Auto Disconnect"),
                           subtitle: const Text(
@@ -388,7 +408,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           groupValue: _bluetoothMode,
                           onChanged: (v) => _saveBluetoothMode(v!),
                         ),
-
                         RadioListTile<String>(
                           title: const Text("Exclusive"),
                           subtitle: const Text(
@@ -399,9 +418,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           onChanged: (v) => _saveBluetoothMode(v!),
                         ),
                       ],
-
                       const Divider(height: 8),
-
                       SwitchListTile(
                         title: const Text("Auto Cast to Board"),
                         subtitle: const Text(
@@ -417,10 +434,33 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-
           const SizedBox(height: 24),
-          const Divider(),
+          const SizedBox(height: 12),
 
+          if (widget.wallId != null && widget.wallId!.isNotEmpty)
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.refresh),
+                title: const Text('Refresh Wall Data'),
+                subtitle: const Text(
+                  'Clear locally stored wall files and get the latest data from DTB.',
+                ),
+                trailing: _refreshingWall
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: _refreshingWall ? null : _refreshWallData,
+              ),
+            ),
+
+          const Divider(),
           Card(
             key: _guideKey,
             elevation: 1,
@@ -444,9 +484,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: _toggleGuide,
             ),
           ),
-
           const SizedBox(height: 12),
-
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 250),
             crossFadeState: _showGuide
@@ -587,9 +625,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             secondChild: const SizedBox.shrink(),
           ),
-
           const SizedBox(height: 16),
-
           Card(
             elevation: 1,
             shape: RoundedRectangleBorder(
@@ -605,9 +641,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: () => _openEditProfile(context),
             ),
           ),
-
           const SizedBox(height: 24),
-
           Card(
             color: Colors.red.shade50,
             shape: RoundedRectangleBorder(
@@ -629,12 +663,9 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: () => _confirmDeleteAccount(context),
             ),
           ),
-
           const SizedBox(height: 24),
-
           if (isPrimarySuperUser) ...[
             const SizedBox(height: 12),
-
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(
@@ -661,9 +692,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ],
-
           const SizedBox(height: 24),
-
           Center(
             child: Text(
               "Version 3.0.0 • © 2026 Digital Training Boards",
@@ -682,7 +711,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     final isExpanded = _expanded[index];
     final theme = Theme.of(context);
-
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -729,9 +757,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
 class _ConfirmPasswordDialog extends StatefulWidget {
   final Future<bool> Function(String password) onConfirm;
-
   const _ConfirmPasswordDialog({required this.onConfirm});
-
   @override
   State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
 }
@@ -741,7 +767,6 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
   bool _busy = false;
   bool _obscure = true;
   String? _error;
-
   @override
   void dispose() {
     _pw.dispose();
@@ -753,11 +778,8 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
       _busy = true;
       _error = null;
     });
-
     final ok = await widget.onConfirm(_pw.text);
-
     if (!mounted) return;
-
     if (ok) {
       Navigator.of(context).pop(true);
     } else {

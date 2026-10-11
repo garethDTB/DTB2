@@ -192,4 +192,24 @@ class DropboxFileService {
 
     return false;
   }
+
+  /// Delete locally cached files for one wall only.
+  /// Does not delete or change anything stored remotely.
+  Future<void> clearWallCache(String wallId) async {
+    if (wallId.isEmpty ||
+        wallId == '.' ||
+        wallId == '..' ||
+        wallId.contains('/') ||
+        wallId.contains('\\')) {
+      throw ArgumentError('Invalid wall ID');
+    }
+
+    final dir = await getApplicationDocumentsDirectory();
+    final wallDir = Directory("${dir.path}/walls/$wallId");
+
+    if (await wallDir.exists()) {
+      await wallDir.delete(recursive: true);
+      print("Cleared local wall cache for $wallId");
+    }
+  }
 }
